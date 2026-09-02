@@ -1,0 +1,27 @@
+model Task {
+  id          String       @id @default(uuid())
+  projectId   String
+  sprintId    String?
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  assigneeId  String?
+  dueDate     DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project      Project       @relation(fields: [projectId], references: [id])
+  sprint       Sprint?       @relation(fields: [sprintId], references: [id])
+  assignee     User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  subtasks     Subtask[]
+  comments     Comment[]
+  attachments  Attachment[]
+  activityLogs ActivityLog[]
+
+  @@index([projectId, status])
+  @@index([assigneeId])
+  @@index([sprintId])
+  @@map("tasks")
+}

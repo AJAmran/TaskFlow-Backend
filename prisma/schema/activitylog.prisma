@@ -1,0 +1,16 @@
+model ActivityLog {
+  id        String   @id @default(uuid())
+  taskId    String?
+  userId    String
+  action    String // e.g. "TASK_STATUS_CHANGED", "MEMBER_INVITED", "PAYMENT_SUCCESS"
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  task Task? @relation(fields: [taskId], references: [id])
+  user User  @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([action])
+  @@map("activity_logs")
+}

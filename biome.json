@@ -7,12 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": [
-			"**",
-			"!src/genrated",
-			"!src/app/templates"
-		]
-		
+		"includes": ["**", "!src/generated", "!src/app/templates"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -36,11 +31,7 @@
 				"useNodejsImportProtocol" : "info"
 			}
 		},
-		"includes": [
-			"**",
-			"!src/genrated",
-			"!src/app/templates"
-		]
+		"includes": ["**", "!src/generated", "!src/app/templates"]
 	},
 	"javascript": {
 		"formatter": {

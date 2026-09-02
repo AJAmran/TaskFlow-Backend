@@ -8,6 +8,11 @@ enum OrgRole {
   MEMBER
 }
 
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 enum SubscriptionPlan {
   FREE
   PRO
@@ -15,10 +20,28 @@ enum SubscriptionPlan {
 }
 
 enum SubscriptionStatus {
+  TRIAL
   ACTIVE
   PAST_DUE
   CANCELLED
-  TRIAL
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
 }
 
 enum TaskStatus {
@@ -33,10 +56,4 @@ enum TaskPriority {
   MEDIUM
   HIGH
   URGENT
-}
-
-enum SprintStatus {
-  PLANNED
-  ACTIVE
-  COMPLETED
 }

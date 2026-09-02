@@ -1,46 +1,55 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import express, {
-	type Application,
-	type NextFunction,
-	type Request,
-	type Response,
-} from "express";
+import express, { type Application, type Request, type Response } from "express";
+import helmet from "helmet";
 import httpStatus from "http-status";
+import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
+import { notFound } from "./app/middleware/notFound";
+import router from "./app/routes";
 
 const app: Application = express();
 
-app.use(cors());
 
-// Enable URL-encoded form data parsing
+app.use(helmet());
+
+app.use(
+	cors({
+		origin: process.env.FRONTEND_URL || "*",
+		credentials: true,
+	}),
+);
+
+// Body parsers
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-
-// Middleware to parse JSON bodies
-app.use(express.json());
 app.use(cookieParser());
 
-app.get("/test", async (req: Request, res: Response, next: NextFunction) => {
-	try {
-		res.status(httpStatus.OK).json({
-			success: true,
-			message: "Test route is working fine",
-			data: null,
-		});
-	} catch (error) {
-		console.log(error);
-		next(error);
-	}
-});
-
-// Basic route
-app.get("/", async (req: Request, res: Response) => {
+// Health check 
+app.get("/", (_req: Request, res: Response) => {
 	res.status(httpStatus.OK).json({
 		success: true,
-		message: "Welcome to PH Healthcare System Backend",
+		statusCode: httpStatus.OK,
+		message: "TaskFlow API is running 🚀",
+		data: {
+			name: "TaskFlow — Project Management SaaS",
+			version: "1.0.0",
+			environment: process.env.NODE_ENV || "development",
+		},
 	});
 });
 
-// app.use(globalErrorHandler);
-// app.use(notFound);
+app.get("/health", (_req: Request, res: Response) => {
+	res.status(httpStatus.OK).json({
+		success: true,
+		statusCode: httpStatus.OK,
+		message: "OK",
+		data: { uptime: process.uptime() },
+	});
+});
+
+app.use("/api/v1", router);
+
+app.use(notFound);
+app.use(globalErrorHandler);
 
 export default app;

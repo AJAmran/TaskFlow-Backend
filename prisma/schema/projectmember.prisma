@@ -1,0 +1,13 @@
+model ProjectMember {
+  id        String  @id @default(uuid())
+  projectId String
+  userId    String
+  role      OrgRole @default(MEMBER)
+
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@map("project_members")
+}

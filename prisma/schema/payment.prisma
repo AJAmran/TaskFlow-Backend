@@ -1,0 +1,20 @@
+model Payment {
+  id              String        @id @default(uuid())
+  subscriptionId  String
+  organizationId  String
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("BDT")
+  paymentID       String        @unique
+  trxID           String?
+  status          PaymentStatus @default(PENDING)
+  gatewayResponse Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([subscriptionId])
+  @@map("payments")
+}
