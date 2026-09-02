@@ -1,10 +1,10 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, {
-  type Application,
-  type NextFunction,
-  type Request,
-  type Response,
+	type Application,
+	type NextFunction,
+	type Request,
+	type Response,
 } from "express";
 import httpStatus from "http-status";
 
@@ -20,24 +20,24 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.get("/test", async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    res.status(httpStatus.OK).json({
-      success: true,
-      message: "Test route is working fine",
-      data: null,
-    });
-  } catch (error) {
-    console.log(error);
-    next(error);
-  }
+	try {
+		res.status(httpStatus.OK).json({
+			success: true,
+			message: "Test route is working fine",
+			data: null,
+		});
+	} catch (error) {
+		console.log(error);
+		next(error);
+	}
 });
 
 // Basic route
 app.get("/", async (req: Request, res: Response) => {
-  res.status(httpStatus.OK).json({
-    success: true,
-    message: "Welcome to PH Healthcare System Backend",
-  });
+	res.status(httpStatus.OK).json({
+		success: true,
+		message: "Welcome to PH Healthcare System Backend",
+	});
 });
 
 // app.use(globalErrorHandler);
