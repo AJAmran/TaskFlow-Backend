@@ -35,12 +35,14 @@ async function main() {
 
   const superAdmin = await prisma.user.upsert({
     where: { email: process.env.SUPER_ADMIN_EMAIL ?? "admin@taskflow.dev" },
-    update: {},
+    update: { isEmailVerified: true, emailVerifiedAt: new Date() },
     create: {
       name: process.env.SUPER_ADMIN_NAME ?? "Super Admin",
       email: process.env.SUPER_ADMIN_EMAIL ?? "admin@taskflow.dev",
       password: superAdminPassword,
       platformRole: PlatformRole.SUPER_ADMIN,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
     },
   });
   console.log(`✅  Super Admin: ${superAdmin.email}`);
@@ -51,24 +53,38 @@ async function main() {
 
   const owner = await prisma.user.upsert({
     where: { email: "owner@demo.com" },
-    update: {},
+    update: { isEmailVerified: true },
     create: {
       name: "Demo Owner",
       email: "owner@demo.com",
       password: ownerPassword,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
     },
   });
 
   const member1 = await prisma.user.upsert({
     where: { email: "alice@demo.com" },
-    update: {},
-    create: { name: "Alice Demo", email: "alice@demo.com", password: memberPassword },
+    update: { isEmailVerified: true },
+    create: {
+      name: "Alice Demo",
+      email: "alice@demo.com",
+      password: memberPassword,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
   });
 
   const member2 = await prisma.user.upsert({
     where: { email: "bob@demo.com" },
-    update: {},
-    create: { name: "Bob Demo", email: "bob@demo.com", password: memberPassword },
+    update: { isEmailVerified: true },
+    create: {
+      name: "Bob Demo",
+      email: "bob@demo.com",
+      password: memberPassword,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
   });
 
   console.log("✅  Demo users: owner, alice, bob");

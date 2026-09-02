@@ -24,11 +24,26 @@ const authLimiter = rateLimit({
 	},
 });
 
-router.post("/register", authLimiter, validateRequest(AuthValidation.registerSchema), AuthController.register);
+router.post(
+	"/register",
+	authLimiter,
+	validateRequest(AuthValidation.registerSchema),
+	AuthController.register,
+);
 
-router.post("/login", authLimiter, validateRequest(AuthValidation.loginSchema), AuthController.login);
+router.post(
+	"/login",
+	authLimiter,
+	validateRequest(AuthValidation.loginSchema),
+	AuthController.login,
+);
 
-router.post("/google", authLimiter, validateRequest(AuthValidation.googleLoginSchema), AuthController.googleLogin);
+router.post(
+	"/google",
+	authLimiter,
+	validateRequest(AuthValidation.googleLoginSchema),
+	AuthController.googleLogin,
+);
 
 // Social login alias per guide: /social-login
 router.post(
@@ -38,7 +53,37 @@ router.post(
 	AuthController.googleLogin,
 );
 
-router.post("/refresh-token", AuthController.refreshToken);
+router.post(
+	"/verify-email",
+	validateRequest(AuthValidation.verifyEmailSchema),
+	AuthController.verifyEmail,
+);
+
+router.post(
+	"/resend-otp",
+	authLimiter,
+	validateRequest(AuthValidation.resendOtpSchema),
+	AuthController.resendOtp,
+);
+
+router.post(
+	"/forgot-password",
+	authLimiter,
+	validateRequest(AuthValidation.forgotPasswordSchema),
+	AuthController.forgotPassword,
+);
+
+router.post(
+	"/reset-password",
+	validateRequest(AuthValidation.resetPasswordSchema),
+	AuthController.resetPassword,
+);
+
+router.post(
+	"/refresh-token",
+	validateRequest(AuthValidation.refreshTokenSchema),
+	AuthController.refreshToken,
+);
 
 router.post("/logout", AuthController.logout);
 

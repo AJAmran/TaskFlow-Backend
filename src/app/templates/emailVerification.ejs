@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Verify Your Email</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+<tr><td style="background:#111827;padding:24px 32px;text-align:center;">
+<h1 style="margin:0;color:#ffffff;font-size:22px;letter-spacing:0.5px;">TaskFlow</h1>
+<p style="margin:6px 0 0;color:#9ca3af;font-size:13px;">Project Management SaaS</p>
+</td></tr>
+<tr><td style="padding:32px;">
+<h2 style="margin:0 0 8px;color:#111827;font-size:20px;">Hello <%= name %>,</h2>
+<p style="margin:0 0 16px;color:#374151;font-size:14px;line-height:1.6;">Thanks for joining TaskFlow! Verify your email with the OTP below. This code expires in <strong><%= expiresIn %> minutes</strong>.</p>
+<div style="text-align:center;margin:24px 0;">
+<div style="display:inline-block;background:#111827;color:#ffffff;font-size:28px;font-weight:700;letter-spacing:6px;padding:14px 28px;border-radius:8px;"><%= otp %></div>
+</div>
+<p style="margin:0 0 8px;color:#6b7280;font-size:12px;">If you didn't create an account, you can safely ignore this email.</p>
+<p style="margin:16px 0 0;color:#9ca3af;font-size:12px;">Need help? Reply to this email.</p>
+</td></tr>
+<tr><td style="background:#f9fafb;padding:16px 32px;text-align:center;border-top:1px solid #e5e7eb;">
+<p style="margin:0;color:#9ca3af;font-size:11px;">© <%= new Date().getFullYear() %> TaskFlow — All rights reserved.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

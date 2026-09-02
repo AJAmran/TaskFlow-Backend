@@ -18,6 +18,21 @@ export interface IChangePasswordPayload {
 	newPassword: string;
 }
 
+export interface IVerifyEmailPayload {
+	email: string;
+	otp: string;
+}
+
+export interface IForgotPasswordPayload {
+	email: string;
+}
+
+export interface IResetPasswordPayload {
+	email: string;
+	otp: string;
+	newPassword: string;
+}
+
 export interface IJwtPayload {
 	userId: string;
 	email: string;

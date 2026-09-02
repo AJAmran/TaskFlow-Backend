@@ -10,21 +10,52 @@ import { AuthService } from "./auth.service";
 const cookieOptions = (maxAge: number) => ({
 	httpOnly: true,
 	secure: config.node_env === "production",
-	sameSite: config.node_env === "production" ? ("none" as const) : ("lax" as const),
+	sameSite:
+		config.node_env === "production" ? ("none" as const) : ("lax" as const),
 	maxAge,
 });
 
-const setAuthCookies = (res: Response, accessToken: string, refreshToken: string) => {
+const setAuthCookies = (
+	res: Response,
+	accessToken: string,
+	refreshToken: string,
+) => {
 	// Access token: 15 min default, but we align with env (fallback 15m)
 	// Using ms for maxAge — approximate from env string
 	res.cookie("accessToken", accessToken, cookieOptions(15 * 60 * 1000)); // 15 min
-	res.cookie("refreshToken", refreshToken, cookieOptions(7 * 24 * 60 * 60 * 1000)); // 7 days
+	res.cookie(
+		"refreshToken",
+		refreshToken,
+		cookieOptions(7 * 24 * 60 * 60 * 1000),
+	); // 7 days
 };
 
 const register = catchAsync(async (req: Request, res: Response) => {
-	const result = await AuthService.register(req.body);
+	const result = (await AuthService.register(req.body)) as unknown as {
+		user: unknown;
+		accessToken?: string;
+		refreshToken?: string;
+		message?: string;
+	};
 
-	setAuthCookies(res, result.accessToken, result.refreshToken);
+	// New flow: no tokens until email verified
+	if (!("accessToken" in result) || !result.accessToken) {
+		sendResponse(res, {
+			statusCode: httpStatus.CREATED,
+			success: true,
+			message:
+				(result as { message: string }).message ||
+				"OTP sent to email. Please verify.",
+			data: { user: (result as { user: unknown }).user },
+		});
+		return;
+	}
+
+	setAuthCookies(
+		res,
+		result.accessToken as string,
+		result.refreshToken as string,
+	);
 
 	sendResponse(res, {
 		statusCode: httpStatus.CREATED,
@@ -56,7 +87,10 @@ const login = catchAsync(async (req: Request, res: Response) => {
 });
 
 const refreshToken = catchAsync(async (req: Request, res: Response) => {
-	const token = (req.cookies?.refreshToken as string) || (req.body?.refreshToken as string) || (req.headers["x-refresh-token"] as string);
+	const token =
+		(req.cookies?.refreshToken as string) ||
+		(req.body?.refreshToken as string) ||
+		(req.headers["x-refresh-token"] as string);
 
 	if (!token) {
 		throw new AppError(httpStatus.UNAUTHORIZED, "Refresh token is missing");
@@ -142,12 +176,66 @@ const getMe = catchAsync(async (req: Request, res: Response) => {
 	});
 });
 
+const verifyEmail = catchAsync(async (req: Request, res: Response) => {
+	const result = await AuthService.verifyEmail(req.body);
+
+	setAuthCookies(res, result.accessToken, result.refreshToken);
+
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: "Email verified successfully",
+		data: {
+			user: result.user,
+			accessToken: result.accessToken,
+			refreshToken: result.refreshToken,
+		},
+	});
+});
+
+const resendOtp = catchAsync(async (req: Request, res: Response) => {
+	const result = await AuthService.resendOtp(req.body.email);
+
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: result.message,
+		data: null,
+	});
+});
+
+const forgotPassword = catchAsync(async (req: Request, res: Response) => {
+	const result = await AuthService.forgotPassword(req.body);
+
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: result.message,
+		data: null,
+	});
+});
+
+const resetPassword = catchAsync(async (req: Request, res: Response) => {
+	const result = await AuthService.resetPassword(req.body);
+
+	sendResponse(res, {
+		statusCode: httpStatus.OK,
+		success: true,
+		message: result.message,
+		data: null,
+	});
+});
+
 export const AuthController = {
 	register,
 	login,
 	refreshToken,
 	logout,
 	googleLogin,
+	verifyEmail,
+	resendOtp,
+	forgotPassword,
+	resetPassword,
 	changePassword,
 	getMe,
 };

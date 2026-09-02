@@ -1,16 +1,18 @@
 model User {
-  id           String       @id @default(uuid())
-  name         String
-  email        String       @unique
-  password     String?
-  provider     String       @default("credentials")
-  googleId     String?      @unique
-  profileImage String?
-  platformRole PlatformRole @default(USER)
-  isActive     Boolean      @default(true)
-  deletedAt    DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id               String       @id @default(uuid())
+  name             String
+  email            String       @unique
+  password         String?
+  provider         String       @default("credentials")
+  googleId         String?      @unique
+  profileImage     String?
+  platformRole     PlatformRole @default(USER)
+  isActive         Boolean      @default(true)
+  isEmailVerified  Boolean      @default(false)
+  emailVerifiedAt  DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   ownedOrganizations Organization[]       @relation("OrganizationOwner")
   memberships        OrganizationMember[]
