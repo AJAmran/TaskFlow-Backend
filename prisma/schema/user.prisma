@@ -4,6 +4,8 @@ model User {
   email        String       @unique
   password     String?
   provider     String       @default("credentials")
+  googleId     String?      @unique
+  profileImage String?
   platformRole PlatformRole @default(USER)
   isActive     Boolean      @default(true)
   deletedAt    DateTime?
@@ -19,5 +21,6 @@ model User {
   activityLogs       ActivityLog[]
 
   @@index([email])
+  @@index([provider])
   @@map("users")
 }

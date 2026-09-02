@@ -1,0 +1,26 @@
+export interface IRegisterPayload {
+	name: string;
+	email: string;
+	password: string;
+}
+
+export interface ILoginPayload {
+	email: string;
+	password: string;
+}
+
+export interface IGoogleLoginPayload {
+	idToken: string;
+}
+
+export interface IChangePasswordPayload {
+	oldPassword: string;
+	newPassword: string;
+}
+
+export interface IJwtPayload {
+	userId: string;
+	email: string;
+	name: string;
+	platformRole: string;
+}
