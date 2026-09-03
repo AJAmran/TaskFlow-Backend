@@ -3,6 +3,7 @@ import cors from "cors";
 import express, { type Application, type Request, type Response } from "express";
 import helmet from "helmet";
 import httpStatus from "http-status";
+import path from "node:path";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
 import router from "./app/routes";
@@ -14,7 +15,16 @@ app.use(helmet());
 
 app.use(
 	cors({
-		origin: process.env.FRONTEND_URL || "*",
+		origin: (origin, cb) => {
+			const allowed = [
+				process.env.FRONTEND_URL,
+				"http://localhost:3000",
+				"http://localhost:3001",
+				"http://127.0.0.1:3000",
+			].filter(Boolean) as string[];
+			if (!origin || allowed.includes(origin)) cb(null, true);
+			else cb(null, true);
+		},
 		credentials: true,
 	}),
 );
@@ -48,6 +58,9 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use("/api/v1", router);
+
+app.use("/google-test", express.static(path.join(process.cwd(), "frontend_for_google_login_test")));
+app.get("/google-test.html", (_req, res) => res.sendFile(path.join(process.cwd(), "frontend_for_google_login_test", "index.html")));
 
 app.use(notFound);
 app.use(globalErrorHandler);
