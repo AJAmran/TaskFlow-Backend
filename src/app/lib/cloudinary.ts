@@ -31,6 +31,6 @@ export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
 	try {
 		await cloudinary.uploader.destroy(publicId);
 	} catch {
-		// silent — not critical for main flow
+
 	}
 };

@@ -108,12 +108,12 @@ export const requireRole = (...allowedRoles: OrgRole[]) => {
       if (!req.user)
         throw new AppError(httpStatus.UNAUTHORIZED, "Not authenticated.");
 
-      // Super admin bypasses org role checks when explicitly allowed
+
       if (
         req.user.platformRole === PlatformRole.SUPER_ADMIN &&
         allowedRoles.includes(OrgRole.ORG_OWNER as unknown as OrgRole)
       ) {
-        // still allow through — platform owner can act as org owner for admin endpoints
+
       }
 
       const organizationId =
@@ -188,7 +188,7 @@ export const requireOrgMembership = async (
       );
     }
 
-    // attach for convenience (optional, duck-typed)
+
     (req as unknown as Record<string, unknown>).organizationMember = membership;
     next();
   } catch (error) {

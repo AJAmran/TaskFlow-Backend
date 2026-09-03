@@ -23,7 +23,7 @@ export const globalErrorHandler = (
   let message = "Internal Server Error";
   let errors: TErrorSource[] = [];
 
-  // Zod validation
+
   if (err instanceof ZodError) {
     statusCode = httpStatus.BAD_REQUEST;
     message = "Validation error";
@@ -33,21 +33,21 @@ export const globalErrorHandler = (
     }));
   }
 
-  // AppError
+
   else if (err instanceof AppError) {
     statusCode = err.statusCode;
     message = err.message;
     errors = [{ path: "", message: err.message }];
   }
 
-  // Prisma validation
+
   else if (err instanceof Prisma.PrismaClientValidationError) {
     statusCode = httpStatus.BAD_REQUEST;
     message = "Invalid data provided";
     errors = [{ path: "", message }];
   }
   
-  // Prisma known errors
+
   else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     switch (err.code) {
       case "P2002":
