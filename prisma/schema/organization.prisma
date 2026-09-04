@@ -8,12 +8,13 @@ model Organization {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  owner        User                 @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
+  owner        User                     @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
   members      OrganizationMember[]
   teams        Team[]
   projects     Project[]
   subscription Subscription?
   payments     Payment[]
+  invitations  OrganizationInvitation[]
 
   @@index([slug])
   @@index([status])

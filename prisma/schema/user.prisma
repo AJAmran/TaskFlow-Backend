@@ -14,13 +14,14 @@ model User {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  ownedOrganizations Organization[]       @relation("OrganizationOwner")
+  ownedOrganizations Organization[]           @relation("OrganizationOwner")
   memberships        OrganizationMember[]
   teamMemberships    TeamMember[]
   projectMembers     ProjectMember[]
-  assignedTasks      Task[]               @relation("TaskAssignee")
+  assignedTasks      Task[]                   @relation("TaskAssignee")
   comments           Comment[]
   activityLogs       ActivityLog[]
+  sentInvitations    OrganizationInvitation[] @relation("InvitationSender")
 
   @@index([email])
   @@index([provider])
