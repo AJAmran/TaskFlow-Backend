@@ -46,4 +46,12 @@ router.post(
   SprintController.activateSprint,
 );
 
+router.post(
+  "/:organizationId/projects/:projectId/sprints/:sprintId/complete",
+  authenticate,
+  requireOrgMembership,
+  requireRole(OrgRole.ORG_OWNER),
+  SprintController.completeSprint,
+);
+
 export const sprintRoutes = router;

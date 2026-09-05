@@ -7,64 +7,57 @@ import { sendResponse } from "../../utils/sendResponse";
 import { AuthService } from "./auth.service";
 
 
+const parseExpiryToMs = (value: string, fallbackMs: number): number => {
+	const match = /^(\d+)(s|m|h|d)$/.exec(value.trim());
+	if (!match) return fallbackMs;
+	const amount = Number(match[1]);
+	const unit = match[2] as "s" | "m" | "h" | "d";
+	const multipliers = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+	return amount * multipliers[unit];
+};
+
+const isProduction = config.node_env === "production";
+
 const cookieOptions = (maxAge: number) => ({
 	httpOnly: true,
-	secure: config.node_env === "production",
-	sameSite:
-		config.node_env === "production" ? ("none" as const) : ("lax" as const),
+	secure: isProduction,
+	sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
 	maxAge,
 });
+
+const accessCookieMaxAge = () =>
+	parseExpiryToMs(config.jwt_access_expires_in, 15 * 60 * 1000);
+const refreshCookieMaxAge = () =>
+	parseExpiryToMs(config.jwt_refresh_expires_in, 7 * 24 * 60 * 60 * 1000);
 
 const setAuthCookies = (
 	res: Response,
 	accessToken: string,
 	refreshToken: string,
 ) => {
+	res.cookie("accessToken", accessToken, cookieOptions(accessCookieMaxAge()));
+	res.cookie("refreshToken", refreshToken, cookieOptions(refreshCookieMaxAge()));
+};
 
-	res.cookie("accessToken", accessToken, cookieOptions(15 * 60 * 1000));
-	res.cookie(
-		"refreshToken",
-		refreshToken,
-		cookieOptions(7 * 24 * 60 * 60 * 1000),
-	);
+const clearCookieOptions = {
+	httpOnly: true,
+	secure: isProduction,
+	sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
+	path: "/",
+};
+
+const clearAuthCookies = (res: Response) => {
+	res.clearCookie("accessToken", clearCookieOptions);
+	res.clearCookie("refreshToken", clearCookieOptions);
 };
 
 const register = catchAsync(async (req: Request, res: Response) => {
-	const result = (await AuthService.register(req.body)) as unknown as {
-		user: unknown;
-		accessToken?: string;
-		refreshToken?: string;
-		message?: string;
-	};
-
-
-	if (!("accessToken" in result) || !result.accessToken) {
-		sendResponse(res, {
-			statusCode: httpStatus.CREATED,
-			success: true,
-			message:
-				(result as { message: string }).message ||
-				"OTP sent to email. Please verify.",
-			data: { user: (result as { user: unknown }).user },
-		});
-		return;
-	}
-
-	setAuthCookies(
-		res,
-		result.accessToken as string,
-		result.refreshToken as string,
-	);
-
+	const result = await AuthService.register(req.body);
 	sendResponse(res, {
 		statusCode: httpStatus.CREATED,
 		success: true,
-		message: "User registered successfully",
-		data: {
-			user: result.user,
-			accessToken: result.accessToken,
-			refreshToken: result.refreshToken,
-		},
+		message: result.message,
+		data: { user: result.user },
 	});
 });
 
@@ -92,18 +85,7 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
 	const result = await AuthService.refreshToken(req.cookies.refreshToken);
 	const { accessToken, refreshToken: newRefreshToken } = result;
 
-	res.cookie("accessToken", accessToken, {
-		httpOnly: true,
-		secure: false,
-		sameSite: "none",
-		maxAge: 1000 * 60 * 60 * 24,
-	});
-	res.cookie("refreshToken", newRefreshToken, {
-		httpOnly: true,
-		secure: false,
-		sameSite: "none",
-		maxAge: 1000 * 60 * 60 * 24 * 7,
-	});
+	setAuthCookies(res, accessToken, newRefreshToken);
 
 	sendResponse(res, {
 		statusCode: httpStatus.OK,
@@ -117,16 +99,7 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
 });
 
 const logout = catchAsync(async (_req: Request, res: Response) => {
-	res.clearCookie("accessToken", {
-		httpOnly: true,
-		secure: false,
-		sameSite: "none",
-	});
-	res.clearCookie("refreshToken", {
-		httpOnly: true,
-		secure: false,
-		sameSite: "none",
-	});
+	clearAuthCookies(res);
 
 	sendResponse(res, {
 		statusCode: httpStatus.OK,

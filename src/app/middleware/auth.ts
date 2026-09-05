@@ -4,7 +4,7 @@ import config from "../config";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../utils/AppError";
 import { jwtUtils } from "../utils/jwt";
-import { OrgRole, PlatformRole } from "../../generated/prisma/enums";
+import { PlatformRole, type OrgRole } from "../../generated/prisma/enums";
 
 export interface RequestUser {
   userId: string;
@@ -108,14 +108,6 @@ export const requireRole = (...allowedRoles: OrgRole[]) => {
       if (!req.user)
         throw new AppError(httpStatus.UNAUTHORIZED, "Not authenticated.");
 
-
-      if (
-        req.user.platformRole === PlatformRole.SUPER_ADMIN &&
-        allowedRoles.includes(OrgRole.ORG_OWNER as unknown as OrgRole)
-      ) {
-
-      }
-
       const organizationId =
         (req.params.organizationId as string) ||
         (req.params.orgId as string) ||
@@ -194,24 +186,4 @@ export const requireOrgMembership = async (
   } catch (error) {
     next(error);
   }
-};
-
-export const auth = (...requiredRoles: (OrgRole | PlatformRole)[]) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    await authenticate(req, res, (err?: unknown) => {
-      if (err) return next(err);
-
-      if (requiredRoles.length === 0) return next();
-
-      const wantsSuperAdmin = requiredRoles.includes(
-        PlatformRole.SUPER_ADMIN as unknown as OrgRole,
-      );
-      if (wantsSuperAdmin) {
-        return requireSuperAdmin(req, res, next);
-      }
-
-      const orgRoles = requiredRoles as OrgRole[];
-      return requireRole(...orgRoles)(req, res, next);
-    });
-  };
 };

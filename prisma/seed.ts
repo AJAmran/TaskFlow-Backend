@@ -23,11 +23,11 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  console.log("🌱  Seeding TaskFlow database...");
+  console.log("  Seeding TaskFlow database...");
 
   const SALT = 12;
 
-  // ── 1. Super Admin ─────────────────────────────────────────
+  //  1. Super Admin
   const superAdminPassword = await bcrypt.hash(
     process.env.SUPER_ADMIN_PASSWORD ?? "SuperAdmin@123",
     SALT,
@@ -45,9 +45,9 @@ async function main() {
       emailVerifiedAt: new Date(),
     },
   });
-  console.log(`✅  Super Admin: ${superAdmin.email}`);
+  console.log(`  Super Admin: ${superAdmin.email}`);
 
-  // ── 2. Demo users ──────────────────────────────────────────
+  //  2. Demo users
   const ownerPassword = await bcrypt.hash("Owner@123", SALT);
   const memberPassword = await bcrypt.hash("Member@123", SALT);
 
@@ -87,9 +87,9 @@ async function main() {
     },
   });
 
-  console.log("✅  Demo users: owner, alice, bob");
+  console.log("  Demo users: owner, alice, bob");
 
-  // ── 3. Organization + Subscription (Pro) ──────────────────
+  //  3. Organization + Subscription (Pro)
   const existingOrg = await prisma.organization.findUnique({
     where: { slug: "demo-org" },
   });
@@ -115,9 +115,9 @@ async function main() {
         },
       });
 
-  console.log(`✅  Organization: ${org.name}`);
+  console.log(`  Organization: ${org.name}`);
 
-  // ── 4. Org Memberships ─────────────────────────────────────
+  //  4. Org Memberships
   await prisma.organizationMember.upsert({
     where: { organizationId_userId: { organizationId: org.id, userId: owner.id } },
     update: {},
@@ -132,9 +132,9 @@ async function main() {
     });
   }
 
-  console.log("✅  Org memberships created");
+  console.log("  Org memberships created");
 
-  // ── 5. Project + Members ───────────────────────────────────
+  //  5. Project + Members
   const existingProject = await prisma.project.findFirst({
     where: { organizationId: org.id, name: "Demo Project" },
   });
@@ -161,9 +161,9 @@ async function main() {
     });
   }
 
-  console.log(`✅  Project: ${project.name}`);
+  console.log(`  Project: ${project.name}`);
 
-  // ── 6. Sprint ──────────────────────────────────────────────
+  //  6. Sprint
   const existingSprint = await prisma.sprint.findFirst({
     where: { projectId: project.id },
   });
@@ -180,7 +180,7 @@ async function main() {
         },
       });
 
-  // ── 7. Tasks ───────────────────────────────────────────────
+  //  7. Tasks
   const tasks = [
     { title: "Set up project repository", status: TaskStatus.DONE, priority: TaskPriority.HIGH, assigneeId: owner.id },
     { title: "Design database schema", status: TaskStatus.DONE, priority: TaskPriority.HIGH, assigneeId: member1.id },
@@ -200,8 +200,8 @@ async function main() {
     }
   }
 
-  console.log("✅  5 demo tasks created");
-  console.log("\n🎉  Seed complete!\n");
+  console.log("  5 demo tasks created");
+  console.log("\n  Seed complete!\n");
   console.log("  Super Admin → admin@taskflow.dev / SuperAdmin@123");
   console.log("  Org Owner   → owner@demo.com     / Owner@123");
   console.log("  Members     → alice@demo.com, bob@demo.com / Member@123");
@@ -209,7 +209,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error("❌  Seed failed:", e);
+    console.error("  Seed failed:", e);
     process.exit(1);
   })
   .finally(async () => {

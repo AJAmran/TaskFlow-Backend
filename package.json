@@ -5,7 +5,7 @@
   "main": "dist/src/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-templates.mjs",
     "start": "node dist/src/server.js",
     "db:migrate": "prisma migrate dev --config-file prisma7.config.ts",
     "db:generate": "prisma generate --config-file prisma7.config.ts",

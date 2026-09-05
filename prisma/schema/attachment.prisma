@@ -2,6 +2,7 @@ model Attachment {
   id         String   @id @default(uuid())
   taskId     String
   url        String
+  publicId   String?
   fileName   String
   uploadedBy String
   createdAt  DateTime @default(now())

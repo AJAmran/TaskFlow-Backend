@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate, requireOrgMembership } from "../../middleware/auth";
-import { validateRequest } from "../../middleware/validateRequest";
+import { validateRequest, validateRequestWith } from "../../middleware/validateRequest";
 import { TeamController } from "./team.controller";
 import { TeamValidation } from "./team.validation";
 
@@ -16,10 +16,11 @@ router.post(
 );
 
 router.get(
-  "/:organizationId/teams",
-  authenticate,
-  requireOrgMembership,
-  TeamController.listTeams,
+	"/:organizationId/teams",
+	authenticate,
+	requireOrgMembership,
+	validateRequestWith({ query: TeamValidation.paginationQuerySchema }),
+	TeamController.listTeams,
 );
 
 router.get(
@@ -53,10 +54,11 @@ router.post(
 );
 
 router.get(
-  "/:organizationId/teams/:teamId/members",
-  authenticate,
-  requireOrgMembership,
-  TeamController.listTeamMembers,
+	"/:organizationId/teams/:teamId/members",
+	authenticate,
+	requireOrgMembership,
+	validateRequestWith({ query: TeamValidation.paginationQuerySchema }),
+	TeamController.listTeamMembers,
 );
 
 router.delete(

@@ -32,10 +32,3 @@ export interface IResetPasswordPayload {
 	otp: string;
 	newPassword: string;
 }
-
-export interface IJwtPayload {
-	userId: string;
-	email: string;
-	name: string;
-	platformRole: string;
-}

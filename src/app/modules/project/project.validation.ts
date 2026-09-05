@@ -38,7 +38,12 @@ export const ProjectValidation = {
     role: z.nativeEnum(OrgRole).optional(),
   }),
 
-  listProjectsQuerySchema: z.object({
+	listMembersQuerySchema: z.object({
+		page: z.coerce.number().int().positive().optional().default(1),
+		limit: z.coerce.number().int().positive().max(100).optional().default(10),
+	}),
+
+	listProjectsQuerySchema: z.object({
     page: z.coerce.number().int().positive().optional().default(1),
     limit: z.coerce.number().int().positive().max(100).optional().default(10),
     status: z.nativeEnum(ProjectStatus).optional(),

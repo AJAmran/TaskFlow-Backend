@@ -12,11 +12,23 @@ export const transporter = nodemailer.createTransport({
 	},
 });
 
+const templateDirs = [
+	path.join(process.cwd(), "dist", "src", "app", "templates"),
+	path.join(process.cwd(), "src", "app", "templates"),
+];
+
 export const renderEjsTemplate = async (
 	templateName: string,
 	data: Record<string, unknown>,
 ): Promise<string> => {
-	const filePath = path.join(process.cwd(), "src", "app", "templates", `${templateName}.ejs`);
-	const template = await fs.promises.readFile(filePath, "utf-8");
-	return ejs.render(template, data);
+	for (const dir of templateDirs) {
+		try {
+			const template = await fs.promises.readFile(
+				path.join(dir, `${templateName}.ejs`),
+				"utf-8",
+			);
+			return ejs.render(template, data);
+		} catch {}
+	}
+	throw new Error(`Email template not found: ${templateName}`);
 };

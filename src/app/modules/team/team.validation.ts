@@ -18,7 +18,12 @@ export const TeamValidation = {
       .optional(),
   }),
 
-  addTeamMemberSchema: z.object({
-    userId: z.string({ message: "userId is required" }).uuid("userId must be a valid UUID"),
-  }),
+	addTeamMemberSchema: z.object({
+		userId: z.string({ message: "userId is required" }).uuid("userId must be a valid UUID"),
+	}),
+
+	paginationQuerySchema: z.object({
+		page: z.coerce.number().int().positive().optional().default(1),
+		limit: z.coerce.number().int().positive().max(100).optional().default(10),
+	}),
 };

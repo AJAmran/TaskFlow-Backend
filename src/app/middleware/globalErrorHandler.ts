@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import httpStatus from "http-status";
+import multer from "multer";
 import { ZodError } from "zod";
 import { Prisma } from "../../generated/prisma/client";
 import config from "../config";
@@ -15,13 +16,12 @@ export const globalErrorHandler = (
 ) => {
   const isDevelopment = config.node_env === "development";
 
-  if (isDevelopment) {
-    console.error("❌ GlobalErrorHandler:", err);
-  }
+  console.error("GlobalErrorHandler:", err);
 
   let statusCode: number = httpStatus.INTERNAL_SERVER_ERROR;
   let message = "Internal Server Error";
   let errors: TErrorSource[] = [];
+  let operational = false;
 
 
   if (err instanceof ZodError) {
@@ -31,24 +31,26 @@ export const globalErrorHandler = (
       path: issue.path.join(".") || "body",
       message: issue.message,
     }));
-  }
-
-
-  else if (err instanceof AppError) {
+    operational = true;
+  } else if (err instanceof multer.MulterError) {
+    statusCode = httpStatus.BAD_REQUEST;
+    message =
+      err.code === "LIMIT_FILE_SIZE"
+        ? "File too large. Maximum size is 5MB."
+        : err.message;
+    errors = [{ path: "file", message }];
+    operational = true;
+  } else if (err instanceof AppError) {
     statusCode = err.statusCode;
     message = err.message;
     errors = [{ path: "", message: err.message }];
-  }
-
-
-  else if (err instanceof Prisma.PrismaClientValidationError) {
+    operational = true;
+  } else if (err instanceof Prisma.PrismaClientValidationError) {
     statusCode = httpStatus.BAD_REQUEST;
     message = "Invalid data provided";
     errors = [{ path: "", message }];
-  }
-  
-
-  else if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    operational = true;
+  } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     switch (err.code) {
       case "P2002":
         statusCode = httpStatus.CONFLICT;
@@ -77,6 +79,11 @@ export const globalErrorHandler = (
     errors = [{ path: "", message }];
   } else if (err instanceof Error) {
     message = err.message;
+    errors = [{ path: "", message }];
+  }
+
+  if (!isDevelopment && (statusCode >= 500 || !operational)) {
+    message = "Internal Server Error";
     errors = [{ path: "", message }];
   }
 

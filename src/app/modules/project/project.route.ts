@@ -55,10 +55,11 @@ router.post(
 );
 
 router.get(
-  "/:organizationId/projects/:projectId/members",
-  authenticate,
-  requireOrgMembership,
-  ProjectController.listProjectMembers,
+	"/:organizationId/projects/:projectId/members",
+	authenticate,
+	requireOrgMembership,
+	validateRequestWith({ query: ProjectValidation.listMembersQuerySchema }),
+	ProjectController.listProjectMembers,
 );
 
 router.delete(

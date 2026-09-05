@@ -32,11 +32,11 @@ export const OrganizationValidation = {
   }),
 
   inviteMemberSchema: z.object({
-    email: z
-      .string({ message: "Email is required" })
-      .email("Invalid email format")
-      .trim()
-      .toLowerCase(),
+	email: z
+		.string({ message: "Email is required" })
+		.trim()
+		.toLowerCase()
+		.pipe(z.email("Invalid email format")),
     role: z.nativeEnum(OrgRole).optional().default(OrgRole.MEMBER),
   }),
 

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate, requireOrgMembership, requireRole } from "../../middleware/auth";
-import { validateRequest } from "../../middleware/validateRequest";
+import { validateRequest, validateRequestWith } from "../../middleware/validateRequest";
 import { OrgRole } from "../../../generated/prisma/enums";
 import { OrganizationController } from "./organization.controller";
 import { OrganizationValidation } from "./organization.validation";
@@ -15,7 +15,12 @@ router.post(
   OrganizationController.createOrganization,
 );
 
-router.get("/", authenticate, OrganizationController.getMyOrganizations);
+router.get(
+	"/",
+	authenticate,
+	validateRequestWith({ query: OrganizationValidation.paginationQuerySchema }),
+	OrganizationController.getMyOrganizations,
+);
 
 // Accept invite — must be authenticated but no org membership required
 router.post(
@@ -52,10 +57,11 @@ router.post(
 );
 
 router.get(
-  "/:organizationId/members",
-  authenticate,
-  requireOrgMembership,
-  OrganizationController.listMembers,
+	"/:organizationId/members",
+	authenticate,
+	requireOrgMembership,
+	validateRequestWith({ query: OrganizationValidation.paginationQuerySchema }),
+	OrganizationController.listMembers,
 );
 
 router.patch(

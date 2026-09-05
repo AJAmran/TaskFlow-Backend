@@ -97,10 +97,29 @@ const activateSprint = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const completeSprint = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) throw new AppError(httpStatus.UNAUTHORIZED, "Not authenticated");
+  const { organizationId, projectId, sprintId } = req.params;
+  const result = await SprintService.completeSprint(
+    user.userId,
+    organizationId as string,
+    projectId as string,
+    sprintId as string,
+  );
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Sprint completed successfully",
+    data: result,
+  });
+});
+
 export const SprintController = {
   createSprint,
   listSprints,
   getSprintById,
   updateSprint,
   activateSprint,
+  completeSprint,
 };

@@ -6,6 +6,22 @@ import { redisClient } from "./app/lib/redis";
 
 const PORT = config.port;
 
+const REQUIRED_ENV = [
+	"DATABASE_URL",
+	"JWT_ACCESS_SECRET",
+	"JWT_REFRESH_SECRET",
+] as const;
+
+const validateEnv = () => {
+	const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
+	if (missing.length > 0) {
+			console.error(
+				`Missing required environment variables: ${missing.join(", ")}. See .env.example.`,
+			);
+		process.exit(1);
+	}
+};
+
 const gracefulShutdown = async (signal: string) => {
 	console.log(`\n${signal} received. Shutting down gracefully...`);
 	try {
@@ -23,6 +39,8 @@ const gracefulShutdown = async (signal: string) => {
 
 const main = async () => {
 	try {
+		validateEnv();
+
 		await prisma.$connect();
 		console.log("Connected to the database successfully.");
 
@@ -31,14 +49,14 @@ const main = async () => {
 			if (!redisClient.isOpen) await redisClient.connect();
 			console.log("Redis Connected Successfully.");
 		} catch (redisError) {
-			console.warn("⚠️  Redis connection failed — continuing without cache:", (redisError as Error).message);
+			console.warn("Redis connection failed, continuing without cache:", (redisError as Error).message);
 		}
 
 		try {
 			await transporter.verify();
 			console.log("Nodemailer Connected Successfully.");
 		} catch (mailError) {
-			console.warn("⚠️  Nodemailer verify failed — continuing:", (mailError as Error).message);
+			console.warn("Nodemailer verify failed, continuing:", (mailError as Error).message);
 		}
 
 		const server = app.listen(PORT, () => {
@@ -53,11 +71,10 @@ const main = async () => {
 		});
 		process.on("uncaughtException", async (error) => {
 			console.error("Uncaught Exception:", error);
-			await gracefulShutdown("uncaughtException");
+			server.close(async () => {
+				await gracefulShutdown("uncaughtException");
+			});
 		});
-
-
-		void server;
 	} catch (error) {
 		console.error("Error starting the server:", error);
 		try {

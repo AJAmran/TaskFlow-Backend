@@ -9,6 +9,5 @@ export const notFound = (req: Request, res: Response) => {
     errors: [
       { path: req.originalUrl, message: "The requested route does not exist." },
     ],
-    data: null,
   });
 };

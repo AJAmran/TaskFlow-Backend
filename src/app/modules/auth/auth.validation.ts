@@ -6,7 +6,7 @@ const registerSchema = z.object({
 		.trim()
 		.min(2, "Name must be at least 2 characters")
 		.max(50, "Name must be at most 50 characters"),
-	email: z.email("Invalid email format").trim().toLowerCase(),
+	email: z.string().trim().toLowerCase().pipe(z.email("Invalid email format")),
 	password: z
 		.string({ message: "Password is required" })
 		.min(8, "Password must be at least 8 characters")
@@ -20,7 +20,7 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-	email: z.email("Invalid email format").trim().toLowerCase(),
+	email: z.string().trim().toLowerCase().pipe(z.email("Invalid email format")),
 	password: z
 		.string({ message: "Password is required" })
 		.min(1, "Password is required"),
@@ -32,12 +32,8 @@ const googleLoginSchema = z.object({
 		.min(10, "Invalid idToken"),
 });
 
-const refreshTokenSchema = z.object({
-	refreshToken: z.string({ message: "Refresh token is required" }).optional(),
-});
-
 const verifyEmailSchema = z.object({
-	email: z.email("Invalid email format").trim().toLowerCase(),
+	email: z.string().trim().toLowerCase().pipe(z.email("Invalid email format")),
 	otp: z
 		.string()
 		.trim()
@@ -46,15 +42,15 @@ const verifyEmailSchema = z.object({
 });
 
 const resendOtpSchema = z.object({
-	email: z.email("Invalid email format").trim().toLowerCase(),
+	email: z.string().trim().toLowerCase().pipe(z.email("Invalid email format")),
 });
 
 const forgotPasswordSchema = z.object({
-	email: z.email("Invalid email format").trim().toLowerCase(),
+	email: z.string().trim().toLowerCase().pipe(z.email("Invalid email format")),
 });
 
 const resetPasswordSchema = z.object({
-	email: z.email("Invalid email format").trim().toLowerCase(),
+	email: z.string().trim().toLowerCase().pipe(z.email("Invalid email format")),
 	otp: z
 		.string()
 		.trim()
@@ -90,7 +86,6 @@ export const AuthValidation = {
 	registerSchema,
 	loginSchema,
 	googleLoginSchema,
-	refreshTokenSchema,
 	verifyEmailSchema,
 	resendOtpSchema,
 	forgotPasswordSchema,

@@ -13,5 +13,3 @@ package-lock.json
 pnpm-workspace.yaml
 .vscode
 /generated/prisma
-technicalrequirement.md
-TASKFLOW_DEVELOPMENT_GUIDE.md

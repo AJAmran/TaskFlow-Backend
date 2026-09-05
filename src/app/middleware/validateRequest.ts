@@ -24,14 +24,24 @@ export const validateRequestWith = (schemas: {
     try {
       if (schemas.body)
         req.body = await schemas.body.parseAsync(req.body ?? {});
-      if (schemas.query)
-        req.query = (await schemas.query.parseAsync(
-          req.query,
-        )) as typeof req.query;
-      if (schemas.params)
-        req.params = (await schemas.params.parseAsync(
-          req.params,
-        )) as typeof req.params;
+      if (schemas.query) {
+        const parsed = await schemas.query.parseAsync(req.query);
+        Object.defineProperty(req, "query", {
+          value: parsed,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
+      }
+      if (schemas.params) {
+        const parsed = await schemas.params.parseAsync(req.params);
+        Object.defineProperty(req, "params", {
+          value: parsed,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
+      }
       next();
     } catch (error) {
       next(error);

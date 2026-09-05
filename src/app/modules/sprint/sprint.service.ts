@@ -205,10 +205,46 @@ const activateSprint = async (
   return result;
 };
 
+const completeSprint = async (
+  userId: string,
+  organizationId: string,
+  projectId: string,
+  sprintId: string,
+) => {
+  await ensureOrgMembership(userId, organizationId, true);
+  await ensureProject(organizationId, projectId);
+  const sprint = await ensureSprint(projectId, sprintId);
+
+  if (sprint.status !== SprintStatus.ACTIVE) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Only ACTIVE sprints can be completed. Current status: ${sprint.status}`,
+    );
+  }
+
+  const updated = await prisma.sprint.update({
+    where: { id: sprintId },
+    data: { status: SprintStatus.COMPLETED },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      userId,
+      action: "SPRINT_COMPLETED",
+      meta: { organizationId, projectId, sprintId },
+    },
+  });
+
+  await invalidateOrgDashboard(organizationId);
+
+  return updated;
+};
+
 export const SprintService = {
   createSprint,
   listSprints,
   getSprintById,
   updateSprint,
   activateSprint,
+  completeSprint,
 };

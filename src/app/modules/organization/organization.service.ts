@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 import httpStatus from "http-status";
 import { OrgRole, SubscriptionPlan, SubscriptionStatus } from "../../../generated/prisma/enums";
 import { prisma } from "../../lib/prisma";
@@ -279,7 +279,7 @@ const inviteMember = async (
       text: `You've been invited to join ${organization.name} as ${role}. Token: ${token}. Expires in 7 days.`,
     });
   } catch (e) {
-    console.warn("⚠️  Invite email failed:", (e as Error).message);
+    console.warn("Invite email failed:", (e as Error).message);
   }
 
   return invitation;
@@ -320,8 +320,8 @@ const acceptInvite = async (userId: string, token: string) => {
     }
 
     // if soft-deleted membership exists, restore it
-    let membership;
-    if (existing && existing.deletedAt) {
+    let membership: Awaited<ReturnType<typeof tx.organizationMember.create>>;
+    if (existing?.deletedAt) {
       membership = await tx.organizationMember.update({
         where: { id: existing.id },
         data: { deletedAt: null, role: invitation.role, joinedAt: new Date() },
@@ -468,7 +468,7 @@ const removeMember = async (requesterId: string, organizationId: string, targetU
     }
   }
 
-  // prevent removing org ownerUserId? allow but we already check owner count
+  // removing the org owner is allowed as long as one owner remains
   const updated = await prisma.organizationMember.update({
     where: { id: target.id },
     data: { deletedAt: new Date() },

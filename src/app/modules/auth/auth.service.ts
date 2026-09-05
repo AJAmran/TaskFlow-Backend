@@ -1,11 +1,11 @@
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import httpStatus from "http-status";
 import config from "../../config";
 import { googleClient } from "../../lib/googleAuth";
 import { renderEjsTemplate, transporter } from "../../lib/nodemailer";
 import { prisma } from "../../lib/prisma";
-import { redisClient } from "../../lib/redis";
+import { redisClient, requireRedis } from "../../lib/redis";
 import { AppError } from "../../utils/AppError";
 import { jwtUtils } from "../../utils/jwt";
 import type { TokenPayload } from "google-auth-library";
@@ -61,9 +61,6 @@ const otpResetKey = (email: string) => `otp:reset:${email.toLowerCase()}`;
 const otpResetCooldownKey = (email: string) =>
   `otp:reset:cooldown:${email.toLowerCase()}`;
 
-const otpKey = otpVerifyKey;
-const otpCooldownKey = otpVerifyCooldownKey;
-
 const generateOtp = (): string => crypto.randomInt(100000, 1000000).toString();
 
 const sendVerificationEmail = async (
@@ -93,10 +90,7 @@ const sendVerificationEmail = async (
         html: `<p>Hello ${name}, your OTP is <b>${otp}</b> (10 min).</p>`,
       });
     } catch {}
-    console.warn(
-      "⚠️  Failed to send verification email:",
-      (error as Error).message,
-    );
+    console.warn("Failed to send verification email:", (error as Error).message);
   }
 };
 
@@ -127,18 +121,30 @@ const sendResetPasswordEmail = async (
         html: `<p>Hello ${name}, your reset OTP is <b>${otp}</b> (10 min).</p>`,
       });
     } catch {}
-    console.warn("⚠️  Failed to send reset email:", (error as Error).message);
+    console.warn("Failed to send reset email:", (error as Error).message);
   }
 };
 
 const register = async (payload: IRegisterPayload) => {
   const email = payload.email.trim().toLowerCase();
+  requireRedis();
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing && !existing.deletedAt) {
     if (!existing.isEmailVerified) {
+      const onCooldown = await redisClient.get(otpVerifyCooldownKey(email));
+      if (onCooldown) {
+        throw new AppError(
+          httpStatus.TOO_MANY_REQUESTS,
+          `Please wait ${OTP_RESEND_COOLDOWN} seconds before requesting a new OTP`,
+        );
+      }
       const otp = generateOtp();
-      await redisClient.set(otpKey(email), otp, {
+      await redisClient.set(otpVerifyKey(email), otp, {
         expiration: { type: "EX", value: OTP_TTL_SECONDS },
+      });
+      await redisClient.set(otpVerifyCooldownKey(email), "1", {
+        expiration: { type: "EX", value: OTP_RESEND_COOLDOWN },
       });
       await sendVerificationEmail(email, otp, existing.name);
       throw new AppError(
@@ -168,10 +174,10 @@ const register = async (payload: IRegisterPayload) => {
   });
 
   const otp = generateOtp();
-  await redisClient.set(otpKey(email), otp, {
+  await redisClient.set(otpVerifyKey(email), otp, {
     expiration: { type: "EX", value: OTP_TTL_SECONDS },
   });
-  await redisClient.set(otpCooldownKey(email), "1", {
+  await redisClient.set(otpVerifyCooldownKey(email), "1", {
     expiration: { type: "EX", value: OTP_RESEND_COOLDOWN },
   });
   await sendVerificationEmail(email, otp, user.name);
@@ -187,20 +193,26 @@ const login = async (payload: ILoginPayload) => {
   const email = payload.email.trim().toLowerCase();
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || user.deletedAt)
-    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    throw new AppError(httpStatus.UNAUTHORIZED, "Invalid email or password");
+  if (!user.password)
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "This account was created with Google. Please login with Google.",
+    );
   if (!user.isActive)
     throw new AppError(
       httpStatus.FORBIDDEN,
       "Your account has been blocked. Please contact support.",
     );
   if (!user.isEmailVerified && user.provider === "credentials" && user.platformRole !== "SUPER_ADMIN") {
+    requireRedis();
     const otp = generateOtp();
-    const cooldown = await redisClient.get(otpCooldownKey(email));
+    const cooldown = await redisClient.get(otpVerifyCooldownKey(email));
     if (!cooldown) {
-      await redisClient.set(otpKey(email), otp, {
+      await redisClient.set(otpVerifyKey(email), otp, {
         expiration: { type: "EX", value: OTP_TTL_SECONDS },
       });
-      await redisClient.set(otpCooldownKey(email), "1", {
+      await redisClient.set(otpVerifyCooldownKey(email), "1", {
         expiration: { type: "EX", value: OTP_RESEND_COOLDOWN },
       });
       await sendVerificationEmail(email, otp, user.name);
@@ -210,17 +222,9 @@ const login = async (payload: ILoginPayload) => {
       "Email not verified. Please verify your email. An OTP has been sent if not recently.",
     );
   }
-  if (!user.password) {
-    if (user.provider === "google")
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        "This account was created with Google. Please login with Google.",
-      );
-    throw new AppError(httpStatus.UNAUTHORIZED, "Invalid credentials");
-  }
-  const isMatched = await bcrypt.compare(payload.password, user.password);
+  const isMatched = await bcrypt.compare(payload.password, user.password as string);
   if (!isMatched)
-    throw new AppError(httpStatus.UNAUTHORIZED, "Invalid credentials");
+    throw new AppError(httpStatus.UNAUTHORIZED, "Invalid email or password");
   const tokens = buildTokens(user);
   return { user: sanitizeUser(user), ...tokens };
 };
@@ -257,12 +261,12 @@ const refreshToken = async (token: string) => {
   const accessToken = jwtUtils.createToken(
     jwtPayload,
     config.jwt_access_secret,
-    config.jwt_access_expires_in as unknown as string,
+    config.jwt_access_expires_in,
   );
   const refreshToken = jwtUtils.createToken(
     jwtPayload,
     config.jwt_refresh_secret,
-    config.jwt_refresh_expires_in as unknown as string,
+    config.jwt_refresh_expires_in,
   );
   return { accessToken, refreshToken };
 };
@@ -314,7 +318,7 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
           },
         });
         try {
-          await redisClient.del(otpKey(email));
+          await redisClient.del(otpVerifyKey(email));
         } catch {}
       } else {
         if (!existingByEmail.isEmailVerified) {
@@ -350,7 +354,7 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
       data: { isEmailVerified: true, emailVerifiedAt: new Date() },
     });
     try {
-      await redisClient.del(otpKey(email));
+      await redisClient.del(otpVerifyKey(email));
     } catch {}
   }
   const tokens = buildTokens(user);
@@ -397,7 +401,8 @@ const verifyEmail = async (payload: IVerifyEmailPayload) => {
     throw new AppError(httpStatus.BAD_REQUEST, "Email already verified");
   if (!user.isActive)
     throw new AppError(httpStatus.FORBIDDEN, "Account is blocked");
-  const storedOtp = await redisClient.get(otpKey(email));
+  requireRedis();
+  const storedOtp = await redisClient.get(otpVerifyKey(email));
   if (!storedOtp)
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -409,8 +414,8 @@ const verifyEmail = async (payload: IVerifyEmailPayload) => {
     where: { id: user.id },
     data: { isEmailVerified: true, emailVerifiedAt: new Date() },
   });
-  await redisClient.del(otpKey(email));
-  await redisClient.del(otpCooldownKey(email));
+  await redisClient.del(otpVerifyKey(email));
+  await redisClient.del(otpVerifyCooldownKey(email));
   const tokens = buildTokens(updated);
   return { user: sanitizeUser(updated), ...tokens };
 };
@@ -424,17 +429,18 @@ const resendOtp = async (emailRaw: string) => {
     throw new AppError(httpStatus.BAD_REQUEST, "Email already verified");
   if (!user.isActive)
     throw new AppError(httpStatus.FORBIDDEN, "Account is blocked");
-  const cooldown = await redisClient.get(otpCooldownKey(email));
+  requireRedis();
+  const cooldown = await redisClient.get(otpVerifyCooldownKey(email));
   if (cooldown)
     throw new AppError(
       httpStatus.TOO_MANY_REQUESTS,
       `Please wait ${OTP_RESEND_COOLDOWN} seconds before requesting a new OTP`,
     );
   const otp = generateOtp();
-  await redisClient.set(otpKey(email), otp, {
+  await redisClient.set(otpVerifyKey(email), otp, {
     expiration: { type: "EX", value: OTP_TTL_SECONDS },
   });
-  await redisClient.set(otpCooldownKey(email), "1", {
+  await redisClient.set(otpVerifyCooldownKey(email), "1", {
     expiration: { type: "EX", value: OTP_RESEND_COOLDOWN },
   });
   await sendVerificationEmail(email, otp, user.name);
@@ -453,6 +459,7 @@ const forgotPassword = async (payload: IForgotPasswordPayload) => {
       httpStatus.BAD_REQUEST,
       "Google account has no password. Please login with Google or set password after verifying email.",
     );
+  requireRedis();
   const cooldown = await redisClient.get(otpResetCooldownKey(email));
   if (cooldown)
     throw new AppError(
@@ -477,6 +484,7 @@ const resetPassword = async (payload: IResetPasswordPayload) => {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
   if (!user.isActive)
     throw new AppError(httpStatus.FORBIDDEN, "Account is blocked");
+  requireRedis();
   const storedOtp = await redisClient.get(otpResetKey(email));
   if (!storedOtp)
     throw new AppError(
