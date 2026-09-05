@@ -1,5 +1,6 @@
 import httpStatus from "http-status";
 import { OrgRole, SprintStatus } from "../../../generated/prisma/enums";
+import { invalidateOrgDashboard } from "../../lib/cache";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { calculatePagination } from "../../utils/pagination";
@@ -67,6 +68,8 @@ const createSprint = async (
       meta: { organizationId, projectId, sprintId: sprint.id, name: sprint.name },
     },
   });
+
+  await invalidateOrgDashboard(organizationId);
 
   return sprint;
 };
@@ -153,6 +156,8 @@ const updateSprint = async (
     },
   });
 
+  await invalidateOrgDashboard(organizationId);
+
   return updated;
 };
 
@@ -194,6 +199,8 @@ const activateSprint = async (
 
     return activated;
   });
+
+  await invalidateOrgDashboard(organizationId);
 
   return result;
 };

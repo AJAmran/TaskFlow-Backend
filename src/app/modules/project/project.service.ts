@@ -1,5 +1,6 @@
 import httpStatus from "http-status";
 import { OrgRole, type ProjectStatus } from "../../../generated/prisma/enums";
+import { invalidateOrgDashboard } from "../../lib/cache";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { calculatePagination } from "../../utils/pagination";
@@ -82,6 +83,8 @@ const createProject = async (
 
     return project;
   });
+
+  await invalidateOrgDashboard(organizationId);
 
   return result;
 };
@@ -192,6 +195,8 @@ const updateProject = async (
     },
   });
 
+  await invalidateOrgDashboard(organizationId);
+
   return updated;
 };
 
@@ -233,6 +238,8 @@ const softDeleteProject = async (userId: string, organizationId: string, project
     return project;
   });
 
+  await invalidateOrgDashboard(organizationId);
+
   return result;
 };
 
@@ -272,6 +279,8 @@ const addProjectMember = async (
       meta: { organizationId, projectId, targetUserId, role: member.role },
     },
   });
+
+  await invalidateOrgDashboard(organizationId);
 
   return member;
 };
@@ -334,6 +343,8 @@ const removeProjectMember = async (
       meta: { organizationId, projectId, targetUserId },
     },
   });
+
+  await invalidateOrgDashboard(organizationId);
 
   return null;
 };
