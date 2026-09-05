@@ -5,7 +5,6 @@ import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { calculatePagination } from "../../utils/pagination";
 
-// helpers
 const slugify = (name: string) =>
   name
     .toLowerCase()
@@ -16,7 +15,6 @@ const slugify = (name: string) =>
 
 const generateInviteToken = () => crypto.randomBytes(32).toString("hex");
 
-// Organization
 const createOrganization = async (userId: string, payload: { name: string; slug?: string }) => {
   const baseSlug = payload.slug ? payload.slug.toLowerCase().trim() : slugify(payload.name);
   let slug = baseSlug;
@@ -186,7 +184,6 @@ const updateOrganization = async (
   return updated;
 };
 
-// Invitation
 const inviteMember = async (
   invitedById: string,
   organizationId: string,
@@ -195,7 +192,6 @@ const inviteMember = async (
   const email = payload.email.toLowerCase().trim();
   const role = payload.role || OrgRole.MEMBER;
 
-  // verify inviter is ORG_OWNER
   const inviterMembership = await prisma.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId, userId: invitedById } },
   });
@@ -209,7 +205,6 @@ const inviteMember = async (
   const organization = await prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null } });
   if (!organization) throw new AppError(httpStatus.NOT_FOUND, "Organization not found");
 
-  // check if target user already member (if user exists)
   const targetUser = await prisma.user.findUnique({ where: { email } });
   if (targetUser) {
     const existingMember = await prisma.organizationMember.findUnique({
@@ -220,7 +215,6 @@ const inviteMember = async (
     }
   }
 
-  // check pending invitation
   const existingInvite = await prisma.organizationInvitation.findUnique({
     where: { organizationId_email: { organizationId, email } },
   });
@@ -356,7 +350,6 @@ const acceptInvite = async (userId: string, token: string) => {
   return result;
 };
 
-// ---------- Members ----------
 const listMembers = async (
   requesterId: string,
   organizationId: string,

@@ -39,6 +39,10 @@ export const AdminValidation = {
     status: z.nativeEnum(OrganizationStatus),
   }),
 
+  updateUserStatusSchema: z.object({
+    isActive: z.boolean({ message: "isActive must be true or false" }),
+  }),
+
   listUsersQuerySchema: z.object({
     ...pageLimit,
     search: z.string().trim().min(1).max(100).optional(),

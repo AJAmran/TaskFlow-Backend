@@ -107,6 +107,31 @@ const listUsers = async (query: {
   return { data: users, meta: buildPaginationMeta(total, page, limit) };
 };
 
+const updateUserStatus = async (adminId: string, targetUserId: string, isActive: boolean) => {
+  const target = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!target || target.deletedAt) throw new AppError(httpStatus.NOT_FOUND, "User not found");
+  if (target.platformRole === "SUPER_ADMIN") {
+    throw new AppError(httpStatus.FORBIDDEN, "Super admin accounts cannot be blocked");
+  }
+  if (target.isActive === isActive) return target;
+
+  const updated = await prisma.user.update({
+    where: { id: targetUserId },
+    data: { isActive },
+    omit: { password: true },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      userId: adminId,
+      action: isActive ? "USER_UNBLOCKED" : "USER_BLOCKED",
+      meta: { targetUserId },
+    },
+  });
+
+  return updated;
+};
+
 const dashboardStats = async () => {
   const [
     totalOrganizations,
@@ -183,6 +208,7 @@ export const AdminService = {
   listOrganizations,
   updateOrganizationStatus,
   listUsers,
+  updateUserStatus,
   dashboardStats,
   auditLogs,
 };

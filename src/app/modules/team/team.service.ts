@@ -111,7 +111,6 @@ const addTeamMember = async (userId: string, organizationId: string, teamId: str
   const team = await prisma.team.findFirst({ where: { id: teamId, organizationId, deletedAt: null } });
   if (!team) throw new AppError(httpStatus.NOT_FOUND, "Team not found");
 
-  // target must be org member
   const orgMember = await prisma.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId, userId: targetUserId } },
   });
@@ -124,7 +123,6 @@ const addTeamMember = async (userId: string, organizationId: string, teamId: str
   });
   if (existing) throw new AppError(httpStatus.CONFLICT, "User is already a member of this team");
 
-  // ensure user exists and not deleted
   const userExists = await prisma.user.findFirst({ where: { id: targetUserId, deletedAt: null } });
   if (!userExists) throw new AppError(httpStatus.NOT_FOUND, "User not found");
 

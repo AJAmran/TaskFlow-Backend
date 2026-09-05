@@ -6,7 +6,6 @@ import { TeamValidation } from "./team.validation";
 
 const router = Router({ mergeParams: true });
 
-// All team routes are organization-scoped — require membership
 router.post(
   "/:organizationId/teams",
   authenticate,

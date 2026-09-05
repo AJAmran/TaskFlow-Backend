@@ -26,6 +26,12 @@ router.get(
   AdminController.listUsers,
 );
 
+router.patch(
+  "/users/:id/status",
+  validateRequest(AdminValidation.updateUserStatusSchema),
+  AdminController.updateUserStatus,
+);
+
 router.get("/dashboard-stats", AdminController.dashboardStats);
 
 router.get(

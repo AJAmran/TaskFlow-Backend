@@ -7,7 +7,6 @@ import { OrganizationValidation } from "./organization.validation";
 
 const router = Router();
 
-// Create organization & list my orgs — only authentication required
 router.post(
   "/",
   authenticate,
@@ -22,7 +21,6 @@ router.get(
 	OrganizationController.getMyOrganizations,
 );
 
-// Accept invite — must be authenticated but no org membership required
 router.post(
   "/invitations/accept",
   authenticate,
@@ -30,7 +28,6 @@ router.post(
   OrganizationController.acceptInvite,
 );
 
-// Org-scoped routes
 router.get(
   "/:organizationId",
   authenticate,

@@ -1,9 +1,3 @@
-/**
- * Prisma Seed — TaskFlow
- * Creates: 1 super admin, 1 demo org (Pro), 3 users, 1 project with tasks
- *
- * Run: npx prisma db seed   (or: npx tsx prisma/seed.ts)
- */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";

@@ -50,6 +50,22 @@ const listUsers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updateUserStatus = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) throw new AppError(httpStatus.UNAUTHORIZED, "Not authenticated");
+  const result = await AdminService.updateUserStatus(
+    user.userId,
+    req.params.id as string,
+    req.body.isActive,
+  );
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: `User ${result.isActive ? "unblocked" : "blocked"} successfully`,
+    data: result,
+  });
+});
+
 const dashboardStats = catchAsync(async (req: Request, res: Response) => {
   if (!req.user) throw new AppError(httpStatus.UNAUTHORIZED, "Not authenticated");
   const result = await AdminService.dashboardStats();
@@ -77,6 +93,7 @@ export const AdminController = {
   listOrganizations,
   updateOrganizationStatus,
   listUsers,
+  updateUserStatus,
   dashboardStats,
   auditLogs,
 };
