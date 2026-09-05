@@ -1,9 +1,10 @@
-import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import httpStatus from "http-status";
 import config from "../../config";
+import { sendEmail } from "../../lib/email";
 import { googleClient } from "../../lib/googleAuth";
-import { renderEjsTemplate, transporter } from "../../lib/nodemailer";
+import { hashPassword, verifyPassword } from "../../lib/password";
+import { renderEjsTemplate } from "../../lib/nodemailer";
 import { prisma } from "../../lib/prisma";
 import { redisClient, requireRedis } from "../../lib/redis";
 import { AppError } from "../../utils/AppError";
@@ -74,8 +75,7 @@ const sendVerificationEmail = async (
       otp,
       expiresIn: OTP_TTL_SECONDS / 60,
     });
-    await transporter.sendMail({
-      from: `"TaskFlow" <${config.email_sender}>`,
+    await sendEmail({
       to: email,
       subject: "Verify your TaskFlow email — OTP",
       html,
@@ -83,8 +83,7 @@ const sendVerificationEmail = async (
     });
   } catch (error) {
     try {
-      await transporter.sendMail({
-        from: `"TaskFlow" <${config.email_sender}>`,
+      await sendEmail({
         to: email,
         subject: "Verify your TaskFlow email — OTP",
         html: `<p>Hello ${name}, your OTP is <b>${otp}</b> (10 min).</p>`,
@@ -105,8 +104,7 @@ const sendResetPasswordEmail = async (
       otp,
       expiresIn: OTP_TTL_SECONDS / 60,
     });
-    await transporter.sendMail({
-      from: `"TaskFlow" <${config.email_sender}>`,
+    await sendEmail({
       to: email,
       subject: "Reset your TaskFlow password — OTP",
       html,
@@ -114,8 +112,7 @@ const sendResetPasswordEmail = async (
     });
   } catch (error) {
     try {
-      await transporter.sendMail({
-        from: `"TaskFlow" <${config.email_sender}>`,
+      await sendEmail({
         to: email,
         subject: "Reset your TaskFlow password — OTP",
         html: `<p>Hello ${name}, your reset OTP is <b>${otp}</b> (10 min).</p>`,
@@ -158,10 +155,7 @@ const register = async (payload: IRegisterPayload) => {
     );
   }
 
-  const hashedPassword = await bcrypt.hash(
-    payload.password,
-    Number(config.bcrypt_salt_rounds),
-  );
+  const hashedPassword = await hashPassword(payload.password);
   const user = await prisma.user.create({
     data: {
       name: payload.name.trim(),
@@ -222,7 +216,7 @@ const login = async (payload: ILoginPayload) => {
       "Email not verified. Please verify your email. An OTP has been sent if not recently.",
     );
   }
-  const isMatched = await bcrypt.compare(payload.password, user.password as string);
+  const isMatched = await verifyPassword(payload.password, user.password as string);
   if (!isMatched)
     throw new AppError(httpStatus.UNAUTHORIZED, "Invalid email or password");
   const tokens = buildTokens(user);
@@ -373,7 +367,7 @@ const changePassword = async (
       httpStatus.BAD_REQUEST,
       "Google accounts cannot change password. Please set a password via reset flow.",
     );
-  const isOldMatched = await bcrypt.compare(payload.oldPassword, user.password);
+  const isOldMatched = await verifyPassword(payload.oldPassword, user.password);
   if (!isOldMatched)
     throw new AppError(httpStatus.UNAUTHORIZED, "Old password is incorrect");
   if (payload.oldPassword === payload.newPassword)
@@ -381,10 +375,7 @@ const changePassword = async (
       httpStatus.BAD_REQUEST,
       "New password must be different from old password",
     );
-  const hashedNew = await bcrypt.hash(
-    payload.newPassword,
-    Number(config.bcrypt_salt_rounds),
-  );
+  const hashedNew = await hashPassword(payload.newPassword);
   await prisma.user.update({
     where: { id: userId },
     data: { password: hashedNew },
@@ -493,10 +484,7 @@ const resetPassword = async (payload: IResetPasswordPayload) => {
     );
   if (storedOtp !== payload.otp.trim())
     throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP");
-  const hashed = await bcrypt.hash(
-    payload.newPassword,
-    Number(config.bcrypt_salt_rounds),
-  );
+  const hashed = await hashPassword(payload.newPassword);
   await prisma.user.update({
     where: { id: user.id },
     data: { password: hashed },

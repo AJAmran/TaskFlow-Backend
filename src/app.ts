@@ -3,7 +3,6 @@ import cors from "cors";
 import express, { type Application, type Request, type Response } from "express";
 import helmet from "helmet";
 import httpStatus from "http-status";
-import path from "node:path";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
 import router from "./app/routes";
@@ -59,13 +58,6 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use("/api/v1", router);
-
-if (process.env.NODE_ENV !== "production") {
-	app.use("/google-test", express.static(path.join(process.cwd(), "frontend_for_google_login_test")));
-	app.get("/google-test.html", (_req, res) =>
-		res.sendFile(path.join(process.cwd(), "frontend_for_google_login_test", "index.html")),
-	);
-}
 
 app.use(notFound);
 app.use(globalErrorHandler);

@@ -260,13 +260,12 @@ const inviteMember = async (
     },
   });
 
-  // Try to send email — don't fail if fails
+  // Try to send email — don't fail if fails (Resend in prod, SMTP in dev)
   try {
-    const { transporter } = await import("../../lib/nodemailer");
+    const { sendEmail } = await import("../../lib/email");
     const { default: config } = await import("../../config");
     const inviteLink = `${config.frontend_url || config.backend_url}/invite?token=${token}`;
-    await transporter.sendMail({
-      from: `"TaskFlow" <${config.email_sender}>`,
+    await sendEmail({
       to: email,
       subject: `You've been invited to join ${organization.name} on TaskFlow`,
       html: `<p>Hello,</p><p>You've been invited to join <b>${organization.name}</b> as <b>${role}</b>.</p><p>Invite token: <code>${token}</code></p><p>Or click: <a href="${inviteLink}">${inviteLink}</a></p><p>Expires in 7 days.</p>`,

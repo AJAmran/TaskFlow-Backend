@@ -52,11 +52,15 @@ const main = async () => {
 			console.warn("Redis connection failed, continuing without cache:", (redisError as Error).message);
 		}
 
-		try {
-			await transporter.verify();
-			console.log("Nodemailer Connected Successfully.");
-		} catch (mailError) {
-			console.warn("Nodemailer verify failed, continuing:", (mailError as Error).message);
+		if (config.resend_api_key) {
+			console.log("Email provider: Resend (HTTP API).");
+		} else {
+			try {
+				await transporter.verify();
+				console.log("Nodemailer Connected Successfully.");
+			} catch (mailError) {
+				console.warn("Nodemailer verify failed, continuing:", (mailError as Error).message);
+			}
 		}
 
 		const server = app.listen(PORT, () => {
