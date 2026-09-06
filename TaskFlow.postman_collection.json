@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "TaskFlow — Full API",
-    "description": "Complete TaskFlow backend collection. Set baseUrl, run Auth logins first (tokens auto-save), then work top-down. Vars: accessToken (owner), memberToken, adminToken, organizationId, teamId, projectId, sprintId, taskId, subtaskId, commentId, attachmentId, paymentID, paymentDbId, inviteToken, memberId, testEmail/otp/resetOtp.",
+      "description": "Complete TaskFlow backend collection. Step-by-step manual plan: TESTING-GUIDE.md. Set baseUrl, run Auth logins first (tokens auto-save), then work top-down. Vars: accessToken (owner), memberToken, adminToken, organizationId, teamId, projectId, sprintId, taskId, subtaskId, commentId, attachmentId, paymentID (gateway, auto-saved on initiate), paymentDbId, inviteToken, memberId, testEmail/otp/resetOtp.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -619,6 +619,32 @@
               ],
               "query": []
             }
+          }
+        },
+        {
+          "name": "GET auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ],
+              "query": []
+            },
+            "description": "Current session user (auth module). Compare with GET /users/me."
           }
         },
         {
@@ -2043,6 +2069,14 @@
               ],
               "query": [
                 {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
                   "key": "status",
                   "value": "TODO"
                 },
@@ -2053,6 +2087,10 @@
                 {
                   "key": "sortBy",
                   "value": "priority"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
                 }
               ]
             }
@@ -2773,7 +2811,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "var j=pm.response.json();",
-                  "if(j.data&&j.data.payment.id)pm.collectionVariables.set('paymentDbId',j.data.payment.id);"
+                  "if(j.data&&j.data.payment.id)pm.collectionVariables.set('paymentDbId',j.data.payment.id);",
+                  "if(j.data&&j.data.payment.paymentID)pm.collectionVariables.set('paymentID',j.data.payment.paymentID);"
                 ]
               }
             }
