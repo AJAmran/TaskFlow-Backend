@@ -21,18 +21,28 @@ async function main() {
 
   const SALT = 12;
 
-  //  1. Super Admin
+  //  1. Super Admin (canonical demo creds: SUPER_ADMIN_* env, defaults match README/.env.example)
+  const superAdminEmail =
+    process.env.SUPER_ADMIN_EMAIL ?? "superadmin@gmail.com";
+  const superAdminName = process.env.SUPER_ADMIN_NAME ?? "Super Admin";
   const superAdminPassword = await bcrypt.hash(
-    process.env.SUPER_ADMIN_PASSWORD ?? "SuperAdmin@123",
+    process.env.SUPER_ADMIN_PASSWORD ?? "Super@admin12345",
     SALT,
   );
 
   const superAdmin = await prisma.user.upsert({
-    where: { email: process.env.SUPER_ADMIN_EMAIL ?? "admin@taskflow.dev" },
-    update: { isEmailVerified: true, emailVerifiedAt: new Date() },
+    where: { email: superAdminEmail },
+    // Re-seed refreshes password so live DB always matches documented demo creds
+    update: {
+      name: superAdminName,
+      password: superAdminPassword,
+      platformRole: PlatformRole.SUPER_ADMIN,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
     create: {
-      name: process.env.SUPER_ADMIN_NAME ?? "Super Admin",
-      email: process.env.SUPER_ADMIN_EMAIL ?? "admin@taskflow.dev",
+      name: superAdminName,
+      email: superAdminEmail,
       password: superAdminPassword,
       platformRole: PlatformRole.SUPER_ADMIN,
       isEmailVerified: true,
@@ -47,7 +57,7 @@ async function main() {
 
   const owner = await prisma.user.upsert({
     where: { email: "owner@demo.com" },
-    update: { isEmailVerified: true },
+    update: { password: ownerPassword, isEmailVerified: true },
     create: {
       name: "Demo Owner",
       email: "owner@demo.com",
@@ -59,7 +69,7 @@ async function main() {
 
   const member1 = await prisma.user.upsert({
     where: { email: "alice@demo.com" },
-    update: { isEmailVerified: true },
+    update: { password: memberPassword, isEmailVerified: true },
     create: {
       name: "Alice Demo",
       email: "alice@demo.com",
@@ -71,7 +81,7 @@ async function main() {
 
   const member2 = await prisma.user.upsert({
     where: { email: "bob@demo.com" },
-    update: { isEmailVerified: true },
+    update: { password: memberPassword, isEmailVerified: true },
     create: {
       name: "Bob Demo",
       email: "bob@demo.com",
@@ -196,7 +206,7 @@ async function main() {
 
   console.log("  5 demo tasks created");
   console.log("\n  Seed complete!\n");
-  console.log("  Super Admin → admin@taskflow.dev / SuperAdmin@123");
+  console.log(`  Super Admin → ${superAdmin.email} / ${process.env.SUPER_ADMIN_PASSWORD ?? "Super@admin12345"}`);
   console.log("  Org Owner   → owner@demo.com     / Owner@123");
   console.log("  Members     → alice@demo.com, bob@demo.com / Member@123");
 }
