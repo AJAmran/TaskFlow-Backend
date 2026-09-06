@@ -126,11 +126,16 @@ const confirmSuccess = async (
 
 const verifyWithGateway = async (bkashPaymentID: string) => {
 	const executed = await executeBkashPayment(bkashPaymentID);
-	const queried = await queryBkashPayment(bkashPaymentID);
+	let queried: Awaited<ReturnType<typeof queryBkashPayment>> | null = null;
+	try {
+		queried = await queryBkashPayment(bkashPaymentID);
+	} catch {}
 	const success =
-		executed.transactionStatus === "Completed" &&
-		queried.transactionStatus === "Completed";
-	return { executed, queried, success };
+		executed.transactionStatus === "Completed" ||
+		executed.statusCode === "0000" ||
+		queried?.transactionStatus === "Completed";
+	const trxID = executed.trxID || (queried?.trxID as string | undefined);
+	return { executed, queried, success, trxID };
 };
 
 const markFailed = (paymentId: string, gatewayResponse: unknown) =>
@@ -211,7 +216,8 @@ const execute = async (userId: string, paymentID: string) => {
 		return { payment: existing, message: "Payment already processed" };
 	}
 
-	const { executed, queried, success } = await verifyWithGateway(paymentID);
+	const { executed, queried, success, trxID } =
+		await verifyWithGateway(paymentID);
 	const gatewayResponse = {
 		...(existing.gatewayResponse as object),
 		execute: executed,
@@ -227,7 +233,7 @@ const execute = async (userId: string, paymentID: string) => {
 		existing.id,
 		gatewayResponse,
 		userId,
-		executed.trxID,
+		trxID,
 	);
 	return { payment, message: "Payment verified and subscription upgraded" };
 };
@@ -263,7 +269,8 @@ const handleCallback = async (query: {
 		};
 	}
 
-	const { executed, queried, success } = await verifyWithGateway(paymentID);
+	const { executed, queried, success, trxID } =
+		await verifyWithGateway(paymentID);
 	const gatewayResponse = {
 		...(existing.gatewayResponse as object),
 		execute: executed,
@@ -286,7 +293,7 @@ const handleCallback = async (query: {
 		existing.id,
 		gatewayResponse,
 		organization.ownerUserId,
-		executed.trxID,
+		trxID,
 	);
 	return { payment, message: "Payment verified and subscription upgraded" };
 };

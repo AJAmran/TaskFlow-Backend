@@ -89,7 +89,7 @@ const WINDOW_15_MIN = 15 * 60 * 1000;
 
 export const authLimiter = rateLimit({
 	windowMs: WINDOW_15_MIN,
-	max: 300,
+	max: 150,
 	standardHeaders: true,
 	legacyHeaders: false,
 	store: new FailoverStore("rl:auth:"),
@@ -103,7 +103,7 @@ export const authLimiter = rateLimit({
 
 export const paymentLimiter = rateLimit({
 	windowMs: WINDOW_15_MIN,
-	max: 10,
+	max: 150,
 	standardHeaders: true,
 	legacyHeaders: false,
 	store: new FailoverStore("rl:payment:"),

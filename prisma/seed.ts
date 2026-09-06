@@ -51,11 +51,48 @@ async function main() {
   });
   console.log(`  Super Admin: ${superAdmin.email}`);
 
-  //  2. Demo users
+  // 2. Real & Demo users for testing
   const ownerPassword = await bcrypt.hash("Owner@123", SALT);
   const memberPassword = await bcrypt.hash("Member@123", SALT);
 
   const owner = await prisma.user.upsert({
+    where: { email: "amran.xgroup@gmail.com" },
+    update: { name: "Amran Hossen (Owner)", password: ownerPassword, isEmailVerified: true },
+    create: {
+      name: "Amran Hossen (Owner)",
+      email: "amran.xgroup@gmail.com",
+      password: ownerPassword,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
+  });
+
+  const member1 = await prisma.user.upsert({
+    where: { email: "mdamranhossen77@gmail.com" },
+    update: { name: "Md Amran Hossen (Member)", password: memberPassword, isEmailVerified: true },
+    create: {
+      name: "Md Amran Hossen (Member)",
+      email: "mdamranhossen77@gmail.com",
+      password: memberPassword,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
+  });
+
+  const member2 = await prisma.user.upsert({
+    where: { email: "firoz03dec@gmail.com" },
+    update: { name: "Firoz Ahmed (Member)", password: memberPassword, isEmailVerified: true },
+    create: {
+      name: "Firoz Ahmed (Member)",
+      email: "firoz03dec@gmail.com",
+      password: memberPassword,
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
+  });
+
+  // Legacy fallback alias for existing scripts
+  await prisma.user.upsert({
     where: { email: "owner@demo.com" },
     update: { password: ownerPassword, isEmailVerified: true },
     create: {
@@ -67,31 +104,7 @@ async function main() {
     },
   });
 
-  const member1 = await prisma.user.upsert({
-    where: { email: "alice@demo.com" },
-    update: { password: memberPassword, isEmailVerified: true },
-    create: {
-      name: "Alice Demo",
-      email: "alice@demo.com",
-      password: memberPassword,
-      isEmailVerified: true,
-      emailVerifiedAt: new Date(),
-    },
-  });
-
-  const member2 = await prisma.user.upsert({
-    where: { email: "bob@demo.com" },
-    update: { password: memberPassword, isEmailVerified: true },
-    create: {
-      name: "Bob Demo",
-      email: "bob@demo.com",
-      password: memberPassword,
-      isEmailVerified: true,
-      emailVerifiedAt: new Date(),
-    },
-  });
-
-  console.log("  Demo users: owner, alice, bob");
+  console.log("  Users created: amran.xgroup@gmail.com, mdamranhossen77@gmail.com, firoz03dec@gmail.com");
 
   //  3. Organization + Subscription (Pro)
   const existingOrg = await prisma.organization.findUnique({
@@ -207,8 +220,8 @@ async function main() {
   console.log("  5 demo tasks created");
   console.log("\n  Seed complete!\n");
   console.log(`  Super Admin → ${superAdmin.email} / ${process.env.SUPER_ADMIN_PASSWORD ?? "Super@admin12345"}`);
-  console.log("  Org Owner   → owner@demo.com     / Owner@123");
-  console.log("  Members     → alice@demo.com, bob@demo.com / Member@123");
+  console.log("  Org Owner   → amran.xgroup@gmail.com / Owner@123");
+  console.log("  Members     → mdamranhossen77@gmail.com, firoz03dec@gmail.com / Member@123");
 }
 
 main()

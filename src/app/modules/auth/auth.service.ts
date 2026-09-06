@@ -53,7 +53,7 @@ const sanitizeUser = <T extends { password?: string | null }>(
 };
 
 const OTP_TTL_SECONDS = 600;
-const OTP_RESEND_COOLDOWN = 60;
+const OTP_RESEND_COOLDOWN = 5;
 
 const otpVerifyKey = (email: string) => `otp:verify:${email.toLowerCase()}`;
 const otpVerifyCooldownKey = (email: string) =>

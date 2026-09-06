@@ -8,11 +8,12 @@ Stack: Node.js + TypeScript + Express 5, PostgreSQL + Prisma 7, Zod, JWT (cookie
 
 | Role | Email | Password |
 |---|---|---|
-| Super Admin | superadmin@gmail.com | Super@admin12345 |
-| Org Owner | owner@demo.com | Owner@123 |
-| Member | alice@demo.com / bob@demo.com | Member@123 |
+| Super Admin | `superadmin@gmail.com` | `Super@admin12345` |
+| Org Owner | `amran.xgroup@gmail.com` | `Owner@123` |
+| Member 1 | `mdamranhossen77@gmail.com` | `Member@123` |
+| Member 2 | `firoz03dec@gmail.com` | `Member@123` |
 
-Seeded org: `demo-org` (PRO plan) with a demo project, sprint and tasks. Values come from `.env` (`SUPER_ADMIN_*`); demo users are created by `prisma/seed.ts`.
+Seeded org: `demo-org` (PRO plan) with a demo project, sprint and tasks. Values come from `.env` (`SUPER_ADMIN_*`); test accounts are seeded by `prisma/seed.ts`.
 
 ## Setup
 

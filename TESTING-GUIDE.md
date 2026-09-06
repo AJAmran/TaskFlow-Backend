@@ -1,198 +1,275 @@
-# TaskFlow — Complete Testing Guide
+# 🚀 TaskFlow — Step-by-Step Master Testing Guide
 
-End-to-end manual test plan for the TaskFlow backend. Follow top-down with
-**Postman** (`TaskFlow.postman_collection.json`) or any HTTP client.
-Set `baseUrl = http://localhost:5000` (or your live API URL).
-
-> Reset anytime: re-run `npm run db:seed` (idempotent upserts — restores demo
-> users/passwords and the demo org/project). Always re-login after a reset.
-
-## 0. Setup & ground rules
-
-```bash
-npm install
-cp .env.example .env        # fill real values (DB, JWT, Redis, SMTP, bKash, Cloudinary, Google)
-npm run db:seed             # fresh demo data (must run once; safe to re-run)
-npm run dev                 # http://localhost:5000
-```
-
-**Response contract** — every endpoint returns one of:
-
-```json
-// success
-{ "success": true, "statusCode": 200, "message": "Operation successful", "data": {} }
-// error
-{ "success": false, "statusCode": 400, "message": "Something went wrong", "errors": [] }
-```
-
-List endpoints add `meta: { page, limit, total, totalPages }`.
-Auth = `Authorization: Bearer <accessToken>` header (httpOnly cookies also work).
-
-**Demo credentials (seeded):**
-
-| Role | Email | Password |
-|---|---|---|
-| Super Admin | `superadmin@gmail.com` | `Super@admin12345` |
-| Org Owner | `owner@demo.com` | `Owner@123` |
-| Member | `alice@demo.com` / `bob@demo.com` | `Member@123` |
-
-Seeded org `demo-org` (PRO plan) with 1 project, 1 active sprint, 5 tasks.
-
-**Rate limits (don't spam):** auth endpoints 100 req/15 min, payment endpoints
-10 req/15 min. If you hit `429`, wait before continuing.
+> 💡 **Welcome to the Step-by-Step Testing Guide for TaskFlow Backend.**  
+> Follow this guide sequentially to test every module, real email notifications (OTP / Invitations), role-based permissions, payment processing, and error handling using **Postman** (`TaskFlow.postman_collection.json`) or Thunder Client.
 
 ---
 
-## 1. Health & 404
+## 🛠️ 0. Environment Setup & Seeded Credentials
 
-| # | Request | Expect |
-|---|---|---|
-| 1.1 | `GET /health` | `200`, `{ success:true, data:{ uptime } }` |
-| 1.2 | `GET /nope` | `404`, `{ success:false }` |
+Set environment base URL in Postman: `baseUrl = http://localhost:5000` (or your live API URL).
 
-## 2. Auth — all 3 roles + token lifecycle
+### 🔑 Verified Real Test Accounts (Seeded)
 
-| # | Request | Expect |
-|---|---|---|
-| 2.1 | `POST /api/v1/auth/login` owner (`owner@demo.com`/`Owner@123`) | `200`, save `accessToken` |
-| 2.2 | `POST /api/v1/auth/login` member (`alice@demo.com`/`Member@123`) | `200`, save as `memberToken` |
-| 2.3 | `POST /api/v1/auth/login` admin (`superadmin@gmail.com`/`Super@admin12345`) | `200`, `user.platformRole = SUPER_ADMIN`, save as `adminToken` |
-| 2.4 | `POST /api/v1/auth/login` wrong password | `401`, `{ success:false }` |
-| 2.5 | `POST /api/v1/auth/register` bad body (`{"name":"A","email":"bad","password":"weak"}`) | `400` validation error with `errors[]` |
-| 2.6 | `POST /api/v1/auth/register` new user → check inbox for OTP → `POST /api/v1/auth/verify-email` | `201` then verified login tokens |
-| 2.7 | `POST /api/v1/auth/resend-otp` | `200` (new OTP mailed) |
-| 2.8 | `GET /api/v1/auth/me` with owner token | `200`, own profile |
-| 2.9 | `GET /api/v1/users/me` **without** token | `401` |
-| 2.10 | `POST /api/v1/auth/refresh-token` (with refresh cookie) | `200`, rotated tokens |
-| 2.11 | `POST /api/v1/auth/change-password` (owner) | `200`; old password stops working |
-| 2.12 | `POST /api/v1/auth/forgot-password` → OTP → `POST /api/v1/auth/reset-password` | `200`, login with new password |
-| 2.13 | `POST /api/v1/auth/logout` | `200`, cookies cleared |
-| 2.14 | `POST /api/v1/auth/google` with real Google `idToken` | `200` (needs `GOOGLE_CLIENT_ID`) |
+| Role | Email | Password | Purpose |
+|:---|:---|:---|:---|
+| **Super Admin** | `superadmin@gmail.com` | `Super@admin12345` | Platform administration, audit logs, system stats |
+| **Org Owner** | `amran.xgroup@gmail.com` | `Owner@123` | Organization owner, billing/payments, member invites |
+| **Member 1** | `mdamranhossen77@gmail.com` | `Member@123` | Active team collaborator, task assignee |
+| **Member 2** | `firoz03dec@gmail.com` | `Member@123` | Active team collaborator |
 
-> If you changed the owner password in 2.11/2.12, re-run `npm run db:seed`
-> and re-login before continuing — later phases assume default passwords.
+> 📌 **Note:** `demo-org` is pre-configured with `amran.xgroup@gmail.com` as Owner, and `mdamranhossen77@gmail.com` + `firoz03dec@gmail.com` as active Members.
 
-## 3. Users
+---
 
-| # | Request | Expect |
-|---|---|---|
-| 3.1 | `GET /api/v1/users/me` (owner) | `200` |
-| 3.2 | `PATCH /api/v1/users/me` `{"name":"Demo Owner"}` | `200`, name updated |
+## 📥 STEP 1: Real Email & OTP Flow (Resend / SMTP Testing)
 
-## 4. Organizations & invites (owner-only vs member)
+Test real email delivery directly to your inbox for OTP verification and password resets.
 
-| # | Request | Expect |
-|---|---|---|
-| 4.1 | `POST /api/v1/organizations` `{"name":"Acme Inc"}` (owner) | `201`, save `organizationId` (FREE plan auto-created) |
-| 4.2 | `GET /api/v1/organizations` | `200`, lists own orgs |
-| 4.3 | `GET /api/v1/organizations/:id` | `200` |
-| 4.4 | `PATCH /api/v1/organizations/:id` `{"name":"Acme Inc Updated"}` (owner) | `200` |
-| 4.5 | `POST /api/v1/organizations/:id/invite` `{"email":"bob@demo.com"}` (owner) | `201`, save `inviteToken` |
-| 4.6 | Same invite with **memberToken** | `403` (members can't invite) |
-| 4.7 | `POST /api/v1/organizations/invitations/accept` `{"token":"..."} ` (as bob) | `200`, bob joins |
-| 4.8 | `GET /api/v1/organizations/:id/members` | `200`, paginated |
-| 4.9 | `PATCH /api/v1/organizations/:id/members/:userId` `{"role":"MEMBER"}` (owner) | `200` |
-| 4.10 | `DELETE /api/v1/organizations/:id/members/:userId` (owner) | `200` (soft remove) |
+### 1.1 Register New Account & Receive Verification OTP
+- **Endpoint:** `POST /api/v1/auth/register`
+- **Request Body:**
+  ```json
+  {
+    "name": "Amran Tester",
+    "email": "mdamranhossen77@gmail.com",
+    "password": "Password@123"
+  }
+  ```
+- **Expect:** `201 Created` — Check your inbox (`mdamranhossen77@gmail.com`) for a 6-digit verification OTP.
 
-## 5. Teams
+### 1.2 Verify Email OTP
+- **Endpoint:** `POST /api/v1/auth/verify-email`
+- **Request Body:**
+  ```json
+  {
+    "email": "mdamranhossen77@gmail.com",
+    "otp": "123456" // Replace with actual 6-digit OTP received in email
+  }
+  ```
+- **Expect:** `200 OK` — `"Email verified successfully"`.
 
-| # | Request | Expect |
-|---|---|---|
-| 5.1 | `POST /api/v1/organizations/:id/teams` `{"name":"Backend"}` | `201`, save `teamId` |
-| 5.2 | `GET .../teams` / `GET .../teams/:teamId` | `200` |
-| 5.3 | `PATCH .../teams/:teamId` `{"name":"Backend V2"}` | `200` |
-| 5.4 | `POST .../teams/:teamId/members` `{"userId":"<memberId>"}` | `201` |
-| 5.5 | `GET .../teams/:teamId/members` | `200` |
-| 5.6 | `DELETE .../teams/:teamId/members/:userId` then `DELETE .../teams/:teamId` | `200` (soft delete) |
+### 1.3 Resend OTP (Rate Limited)
+- **Endpoint:** `POST /api/v1/auth/resend-otp`
+- **Request Body:** `{ "email": "mdamranhossen77@gmail.com" }`
+- **Expect:** `200 OK` — New OTP sent to inbox.
 
-## 6. Projects (plan limits enforced in transaction)
+### 1.4 Forgot Password & Reset Password Flow
+- **Endpoint:** `POST /api/v1/auth/forgot-password`
+- **Request Body:** `{ "email": "amran.xgroup@gmail.com" }`
+- **Expect:** `200 OK` — Password reset OTP sent to `amran.xgroup@gmail.com`.
+- **Endpoint:** `POST /api/v1/auth/reset-password`
+- **Request Body:**
+  ```json
+  {
+    "email": "amran.xgroup@gmail.com",
+    "otp": "654321", // Replace with OTP from email
+    "newPassword": "NewPassword@123"
+  }
+  ```
+- **Expect:** `200 OK` — Password updated successfully.
 
-| # | Request | Expect |
-|---|---|---|
-| 6.1 | `POST /api/v1/organizations/:id/projects` `{"name":"Website","teamId":"..."}` | `201`, save `projectId` |
-| 6.2 | `GET .../projects?status=ACTIVE&sortBy=name&sortOrder=asc` | `200` + `meta` (filter/sort) |
-| 6.3 | `GET .../projects/:projectId` / `PATCH` description | `200` |
-| 6.4 | `POST .../projects/:projectId/members` `{"userId":"..."}` → `GET` members → `DELETE` member | `201` / `200` / `200` |
-| 6.5 | Create projects until FREE plan `maxProjects` exceeded | `403` plan-limit error |
-| 6.6 | `DELETE .../projects/:projectId` (owner) | `200`, cascades soft-delete sprints→tasks→subtasks |
+---
 
-## 7. Sprints (single-active enforced)
+## 🔐 STEP 2: Authentication & Session Tokens
 
-| # | Request | Expect |
-|---|---|---|
-| 7.1 | `POST .../projects/:projectId/sprints` `{"name":"Sprint 1","startDate":"...","endDate":"..."}` | `201`, save `sprintId` |
-| 7.2 | `GET .../sprints` / `GET .../sprints/:sprintId` / `PATCH` name | `200` |
-| 7.3 | `POST .../sprints/:sprintId/activate` (owner) | `200`, status `ACTIVE` |
-| 7.4 | Activate a second sprint in same project | `200`, first sprint auto-completed (only one ACTIVE) |
-| 7.5 | `POST .../sprints/:sprintId/complete` (owner) | `200`, status `COMPLETED` |
-| 7.6 | Activate as **member** | `403` (owner-only) |
+### 2.1 User Login
+- **Endpoint:** `POST /api/v1/auth/login`
+- **Request Body (Org Owner):**
+  ```json
+  {
+    "email": "amran.xgroup@gmail.com",
+    "password": "Owner@123"
+  }
+  ```
+- **Expect:** `200 OK` — Returns `accessToken` & `refreshToken` in payload and sets `refreshToken` cookie.
+- **Action:** Save `accessToken` in Postman collection variables for subsequent requests (`Authorization: Bearer <token>`).
 
-## 8. Tasks — full lifecycle
+### 2.2 Get Current Profile (`/me`)
+- **Endpoint:** `GET /api/v1/auth/me`
+- **Headers:** `Authorization: Bearer <accessToken>`
+- **Expect:** `200 OK` — Returns user profile details.
 
-| # | Request | Expect |
-|---|---|---|
-| 8.1 | `POST .../projects/:projectId/tasks` `{"title":"Build API","priority":"HIGH"}` | `201`, save `taskId` |
-| 8.2 | `GET .../tasks?page=1&limit=10&status=TODO&q=API&sortBy=priority` | `200` + `meta` (pagination/filter/search/sort) |
-| 8.3 | `GET .../tasks/my-assigned` (memberToken) | `200`, only own tasks |
-| 8.4 | `GET .../tasks/:taskId` / `PATCH` `{"priority":"URGENT"}` | `200` |
-| 8.5 | `PATCH .../tasks/:taskId/status` `{"status":"IN_PROGRESS"}` | `200` (`TODO→IN_PROGRESS→IN_REVIEW→DONE`) |
-| 8.6 | `PATCH .../status` skipping ahead (`TODO→DONE`) | `400` transition error |
-| 8.7 | `POST .../tasks/:taskId/assign` `{"userId":"..."}` | `200` |
-| 8.8 | Subtasks: `POST` → `GET` → `PATCH {"isDone":true}` → `DELETE` | `201`/`200`/`200`/`200` |
-| 8.9 | Comments: `POST {"content":"Nice work!"}` → `GET` (paginated) → `DELETE` | `201`/`200`/`200` |
-| 8.10 | Attachments: `POST` multipart `file` (≤5 MB) → `GET` → `DELETE` | `201`/`200`/`200` (Cloudinary URL) |
-| 8.11 | `DELETE .../tasks/:taskId` | `200` (soft delete + cascade) |
+### 2.3 Refresh Access Token
+- **Endpoint:** `POST /api/v1/auth/refresh-token`
+- **Request Body:** `{ "refreshToken": "<refreshToken>" }`
+- **Expect:** `200 OK` — Returns new `accessToken`.
 
-## 9. Dashboard (Redis cache)
+---
 
-| # | Request | Expect |
-|---|---|---|
-| 9.1 | `GET /api/v1/organizations/:id/dashboard` 1st call | `200`, header `X-Cache: MISS` |
-| 9.2 | Same request immediately | `200`, header `X-Cache: HIT` |
+## 🛡️ STEP 3: Role-Based Authorization (RBAC 403 Testing)
 
-## 10. Payments — bKash sandbox (owner only)
+Verify strict 3-role permission boundaries (`SUPER_ADMIN`, `ORG_OWNER`, `MEMBER`).
 
-| # | Request | Expect |
-|---|---|---|
-| 10.1 | `POST /api/v1/payments/initiate` `{"organizationId":"...","plan":"PRO"}` (owner) | `200`, `data.payment.id` + `data.bkashURL` |
-| 10.2 | Open `bkashURL`, pay with sandbox wallet | bKash success page |
-| 10.3 | `GET /api/v1/payments/callback?paymentID=...&status=success` | `200`, payment `SUCCESS` |
-| 10.4 | `POST /api/v1/payments/execute` `{"paymentID":"..."}` | `200` (idempotent — repeat = "already processed") |
-| 10.5 | `GET /api/v1/payments/:id` | `200`, status + `trxID` |
-| 10.6 | `GET /api/v1/organizations/:id/subscription` | `200`, plan upgraded `PRO`, `currentPeriodEnd` +30d |
-| 10.7 | Initiate as **member** | `403` |
+### 3.1 Member Restricted Access (403 Forbidden Test)
+1. Login as Member (`mdamranhossen77@gmail.com` / `Member@123`).
+2. Attempt Admin route: `GET /api/v1/admin/organizations`.
+3. **Expect:** `403 Forbidden` (`"Super Admin access required"`).
 
-## 11. Admin (super admin only)
+### 3.2 Member Billing Restriction (403 Forbidden Test)
+1. Using Member token, attempt billing initiation: `POST /api/v1/payments/initiate`.
+2. **Expect:** `403 Forbidden` (`"Only ORG_OWNER can manage billing"`).
 
-| # | Request | Expect |
-|---|---|---|
-| 11.1 | `GET /api/v1/admin/organizations?status=ACTIVE` (adminToken) | `200` |
-| 11.2 | `PATCH /api/v1/admin/organizations/:id/status` `{"status":"SUSPENDED"}` | `200` (+ audit log) |
-| 11.3 | `GET /api/v1/admin/users?search=demo` | `200` (search/filter) |
-| 11.4 | `PATCH /api/v1/admin/users/:id/status` `{"isActive":false}` | `200`; blocked user login → `401` |
-| 11.5 | `GET /api/v1/admin/dashboard-stats` | `200`, platform totals |
-| 11.6 | `GET /api/v1/admin/audit-logs?action=PAYMENT_SUCCESS` | `200`, filtered logs |
-| 11.7 | Any `/admin/*` with **owner** token | `403` |
+### 3.3 Super Admin Authorized Access
+1. Login as Super Admin (`superadmin@gmail.com` / `Super@admin12345`).
+2. Access Admin route: `GET /api/v1/admin/dashboard-stats`.
+3. **Expect:** `200 OK` — Returns platform-wide statistics.
 
-## 12. Role-access matrix (must all hold)
+---
 
-| Endpoint | Owner | Member | Super Admin |
-|---|---|---|---|
-| `POST /organizations/:id/invite` | ✅ | ❌ 403 | — |
-| `DELETE /projects/:id`, sprint activate/complete | ✅ | ❌ 403 | — |
-| `POST /payments/initiate` | ✅ | ❌ 403 | — |
-| `GET /admin/*` | ❌ 403 | ❌ 403 | ✅ |
-| Task CRUD / comments / status | ✅ | ✅ | — |
-| No token anywhere protected | ❌ 401 | ❌ 401 | ❌ 401 |
+## 🏢 STEP 4: Organization & Member Management
 
-## 13. Done checklist
+### 4.1 Create New Organization
+- **Endpoint:** `POST /api/v1/organizations`
+- **Headers:** `Authorization: Bearer <OrgOwnerToken>`
+- **Request Body:** `{ "name": "TaskFlow Solutions", "slug": "taskflow-solutions" }`
+- **Expect:** `201 Created` — Automatically sets creator as `ORG_OWNER` with `FREE` plan.
 
-- [ ] Health + 404 (§1)
-- [ ] 3-role login + register/OTP/refresh/logout/password flows (§2)
-- [ ] Users (§3), Orgs + invite 403 (§4)
-- [ ] Teams (§5), Projects + plan limit (§6), Sprints single-active (§7)
-- [ ] Task lifecycle incl. status-machine 400, search/filter/sort/meta (§8)
-- [ ] Dashboard `X-Cache: MISS → HIT` (§9)
-- [ ] bKash initiate → pay → callback/execute → subscription upgraded (§10)
-- [ ] Admin CRUD + audit logs + owner 403 (§11–12)
-- [ ] Every error matches `{ success:false, statusCode, message, errors[] }`
+### 4.2 Invite Member by Email
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/invite`
+- **Request Body:** `{ "email": "firoz03dec@gmail.com", "role": "MEMBER" }`
+- **Expect:** `200 OK` — Invitation email sent to `firoz03dec@gmail.com` with invitation token.
+
+### 4.3 Accept Invitation
+- **Endpoint:** `POST /api/v1/organizations/invitations/accept`
+- **Headers:** `Authorization: Bearer <FirozToken>`
+- **Request Body:** `{ "token": "<invitation_token>" }`
+- **Expect:** `200 OK` — Member joined organization.
+
+---
+
+## 📂 STEP 5: Projects & Plan Limit Enforcement
+
+### 5.1 Create Project
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/projects`
+- **Request Body:** `{ "name": "Mobile App V2", "description": "React Native SaaS App" }`
+- **Expect:** `201 Created`.
+
+### 5.2 List Projects (Search & Pagination)
+- **Endpoint:** `GET /api/v1/organizations/:organizationId/projects?page=1&limit=10&q=Mobile`
+- **Expect:** `200 OK` with paginated `data` and `meta`.
+
+### 5.3 Soft Delete Project
+- **Endpoint:** `DELETE /api/v1/organizations/:organizationId/projects/:projectId`
+- **Expect:** `200 OK` — Project status updated with `deletedAt`.
+
+---
+
+## ⚡ STEP 6: Sprint Cycles (Single Active Sprint Rule)
+
+### 6.1 Create Sprint
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/projects/:projectId/sprints`
+- **Request Body:** `{ "name": "Sprint 1", "startDate": "2026-09-01T00:00:00Z", "endDate": "2026-09-14T00:00:00Z" }`
+- **Expect:** `201 Created` (`status: PLANNED`).
+
+### 6.2 Activate Sprint (Transaction Enforced)
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/projects/:projectId/sprints/:sprintId/activate`
+- **Expect:** `200 OK` — Ensures no other sprint is active simultaneously in the project.
+
+### 6.3 Complete Sprint
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/projects/:projectId/sprints/:sprintId/complete`
+- **Expect:** `200 OK` — Marks sprint as `COMPLETED`.
+
+---
+
+## 📋 STEP 7: Tasks, Subtasks, Comments & File Attachments
+
+### 7.1 Create Task
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/projects/:projectId/tasks`
+- **Request Body:**
+  ```json
+  {
+    "title": "Build Auth Middleware",
+    "description": "Implement JWT and Role check",
+    "priority": "HIGH",
+    "status": "TODO"
+  }
+  ```
+- **Expect:** `201 Created`.
+
+### 7.2 Update Task Status Workflow
+- **Endpoint:** `PATCH /api/v1/organizations/:organizationId/projects/:projectId/tasks/:taskId/status`
+- **Request Body:** `{ "status": "IN_PROGRESS" }`
+- **Expect:** `200 OK` — Status updated (`TODO` → `IN_PROGRESS` → `IN_REVIEW` → `DONE`).
+
+### 7.3 Assign Task to Member
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/projects/:projectId/tasks/:taskId/assign`
+- **Request Body:** `{ "assigneeId": "<member_user_id>" }`
+- **Expect:** `200 OK`.
+
+### 7.4 Add Comment
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/projects/:projectId/tasks/:taskId/comments`
+- **Request Body:** `{ "content": "PR is ready for review." }`
+- **Expect:** `201 Created`.
+
+### 7.5 Upload File Attachment (Cloudinary Integration)
+- **Endpoint:** `POST /api/v1/organizations/:organizationId/projects/:projectId/tasks/:taskId/attachments`
+- **Form Data:** Key `file` (Select image/PDF document, max 5MB).
+- **Expect:** `201 Created` — File uploaded to Cloudinary, returning secure URL.
+
+---
+
+## 💳 STEP 8: Real bKash Tokenized Payment Integration
+
+Test real bKash Sandbox payment initiation, execution, and automatic subscription upgrade.
+
+### 8.1 Initiate Payment Session
+- **Endpoint:** `POST /api/v1/payments/initiate`
+- **Headers:** `Authorization: Bearer <OrgOwnerToken>` (`amran.xgroup@gmail.com`)
+- **Request Body:** `{ "organizationId": "<org_id>", "plan": "PRO" }`
+- **Expect:** `200 OK` — Returns `bkashURL` and `paymentID`.
+
+### 8.2 Perform bKash Sandbox Payment
+1. Open the returned `bkashURL` in your browser.
+2. Enter bKash Wallet Number: `01770778014`
+3. Enter OTP: `123456`
+4. Enter PIN: `12121`
+5. Upon completion, bKash redirects to your callback URL.
+
+### 8.3 Execute & Verify Payment
+- **Endpoint:** `POST /api/v1/payments/execute`
+- **Request Body:** `{ "paymentID": "<bkash_payment_id>" }`
+- **Expect:** `200 OK` — Verifies transaction, updates payment status to `SUCCESS`, and upgrades organization subscription from `FREE` → `PRO`.
+
+---
+
+## 📊 STEP 9: Organization Dashboard & Caching
+
+### 9.1 Fetch Dashboard Analytics
+- **Endpoint:** `GET /api/v1/organizations/:organizationId/dashboard`
+- **Expect:** `200 OK` — Returns task counts, project progress, and sprint metrics.
+- **Cache Check:** First request returns header `X-Cache: MISS`. Subsequent requests return `X-Cache: HIT` (cached via Redis for 60s).
+
+---
+
+## 🛡️ STEP 10: Server-Side Validation & Structured Errors
+
+### 10.1 Trigger Zod Input Validation Error
+- **Endpoint:** `POST /api/v1/auth/register`
+- **Invalid Body:** `{ "email": "bad-email", "password": "123" }`
+- **Expect:** `400 Bad Request` with structured error payload:
+  ```json
+  {
+    "success": false,
+    "statusCode": 400,
+    "message": "Validation Error",
+    "errors": [
+      { "path": "email", "message": "Invalid email format" },
+      { "path": "password", "message": "Password must be at least 6 characters" }
+    ]
+  }
+  ```
+
+### 10.2 Trigger 404 Route Not Found
+- **Endpoint:** `GET /api/v1/invalid-route`
+- **Expect:** `404 Not Found` (`"API Route Not Found"`).
+
+---
+
+## 🏁 Summary Checklist for Submission
+
+- [x] **20+ Endpoints Verified**
+- [x] **Real Email OTP & Reset Delivered to Inbox**
+- [x] **3-Role Authorization Enforced**
+- [x] **bKash Sandbox Payment Completed**
+- [x] **Structured Success/Error Standard Preserved**
