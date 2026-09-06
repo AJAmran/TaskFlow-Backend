@@ -1,17 +1,20 @@
 import { Router } from "express";
 import { authenticate, requireOrgMembership } from "../../middleware/auth";
-import { validateRequest, validateRequestWith } from "../../middleware/validateRequest";
+import {
+	validateRequest,
+	validateRequestWith,
+} from "../../middleware/validateRequest";
 import { TeamController } from "./team.controller";
 import { TeamValidation } from "./team.validation";
 
 const router = Router({ mergeParams: true });
 
 router.post(
-  "/:organizationId/teams",
-  authenticate,
-  requireOrgMembership,
-  validateRequest(TeamValidation.createTeamSchema),
-  TeamController.createTeam,
+	"/:organizationId/teams",
+	authenticate,
+	requireOrgMembership,
+	validateRequest(TeamValidation.createTeamSchema),
+	TeamController.createTeam,
 );
 
 router.get(
@@ -23,33 +26,33 @@ router.get(
 );
 
 router.get(
-  "/:organizationId/teams/:teamId",
-  authenticate,
-  requireOrgMembership,
-  TeamController.getTeamById,
+	"/:organizationId/teams/:teamId",
+	authenticate,
+	requireOrgMembership,
+	TeamController.getTeamById,
 );
 
 router.patch(
-  "/:organizationId/teams/:teamId",
-  authenticate,
-  requireOrgMembership,
-  validateRequest(TeamValidation.updateTeamSchema),
-  TeamController.updateTeam,
+	"/:organizationId/teams/:teamId",
+	authenticate,
+	requireOrgMembership,
+	validateRequest(TeamValidation.updateTeamSchema),
+	TeamController.updateTeam,
 );
 
 router.delete(
-  "/:organizationId/teams/:teamId",
-  authenticate,
-  requireOrgMembership,
-  TeamController.softDeleteTeam,
+	"/:organizationId/teams/:teamId",
+	authenticate,
+	requireOrgMembership,
+	TeamController.softDeleteTeam,
 );
 
 router.post(
-  "/:organizationId/teams/:teamId/members",
-  authenticate,
-  requireOrgMembership,
-  validateRequest(TeamValidation.addTeamMemberSchema),
-  TeamController.addTeamMember,
+	"/:organizationId/teams/:teamId/members",
+	authenticate,
+	requireOrgMembership,
+	validateRequest(TeamValidation.addTeamMemberSchema),
+	TeamController.addTeamMember,
 );
 
 router.get(
@@ -61,10 +64,10 @@ router.get(
 );
 
 router.delete(
-  "/:organizationId/teams/:teamId/members/:userId",
-  authenticate,
-  requireOrgMembership,
-  TeamController.removeTeamMember,
+	"/:organizationId/teams/:teamId/members/:userId",
+	authenticate,
+	requireOrgMembership,
+	TeamController.removeTeamMember,
 );
 
 export const teamRoutes = router;

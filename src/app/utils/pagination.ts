@@ -1,4 +1,7 @@
-import type { TPaginationMeta, TPaginationOptions } from "../interfaces/pagination";
+import type {
+	TPaginationMeta,
+	TPaginationOptions,
+} from "../interfaces/pagination";
 
 export const calculatePagination = (options: TPaginationOptions) => {
 	const rawPage = Number(options.page);
@@ -13,7 +16,11 @@ export const calculatePagination = (options: TPaginationOptions) => {
 	return { page, limit, skip, sortBy, sortOrder };
 };
 
-export const buildPaginationMeta = (total: number, page: number, limit: number): TPaginationMeta => ({
+export const buildPaginationMeta = (
+	total: number,
+	page: number,
+	limit: number,
+): TPaginationMeta => ({
 	page,
 	limit,
 	total,

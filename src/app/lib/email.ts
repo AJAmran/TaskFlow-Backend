@@ -9,12 +9,7 @@ export type SendEmailParams = {
 };
 
 /**
- * 2026 email strategy: Resend (HTTP API) for production, SMTP/Gmail for dev.
- *
- * কেন? Gmail SMTP production-এর জন্য নয় — daily 500 limit, From rewrite,
- * location-based block। Resend/Postmark/SES production standard।
- * `RESEND_API_KEY` থাকলে Resend API (native fetch, নতুন dep নেই),
- * না থাকলে 기존 Nodemailer SMTP fallback।
+ * Send transactional email using Resend API if configured, falling back to Nodemailer SMTP.
  */
 export const sendEmail = async (params: SendEmailParams): Promise<void> => {
 	const { to, subject, html, text } = params;

@@ -13,7 +13,8 @@ const config = {
 	jwt_access_secret: process.env.JWT_ACCESS_SECRET as string,
 	jwt_refresh_secret: process.env.JWT_REFRESH_SECRET as string,
 	jwt_access_expires_in: (process.env.JWT_ACCESS_EXPIRES_IN as string) || "1d",
-	jwt_refresh_expires_in: (process.env.JWT_REFRESH_EXPIRES_IN as string) || "7d",
+	jwt_refresh_expires_in:
+		(process.env.JWT_REFRESH_EXPIRES_IN as string) || "7d",
 	google_client_id: process.env.GOOGLE_CLIENT_ID as string,
 	google_client_secret: process.env.GOOGLE_CLIENT_SECRET as string,
 	super_admin_name: process.env.SUPER_ADMIN_NAME as string,
@@ -40,8 +41,7 @@ const config = {
 	bkash_callback_url: process.env.BKASH_CALLBACK_URL as string,
 } as const;
 
-// 2026: fail-fast env validation — production-এ দুর্বল JWT secret নিষেধ।
-// (zod-এর বদলে plain check যাতে config load কখনো crash না করে dev-এ।)
+// Environment validation for secrets in production
 const isProd = config.node_env === "production";
 for (const key of ["jwt_access_secret", "jwt_refresh_secret"] as const) {
 	const val = config[key];
@@ -56,7 +56,9 @@ for (const key of ["jwt_access_secret", "jwt_refresh_secret"] as const) {
 		config.jwt_refresh_secret &&
 		config.jwt_access_secret === config.jwt_refresh_secret
 	) {
-		throw new Error("[config] JWT access and refresh secrets must be different.");
+		throw new Error(
+			"[config] JWT access and refresh secrets must be different.",
+		);
 	}
 }
 

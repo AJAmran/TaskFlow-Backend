@@ -6,13 +6,17 @@ import { catchAsync } from "../../utils/catchAsync";
 import { sendResponse } from "../../utils/sendResponse";
 import { AuthService } from "./auth.service";
 
-
 const parseExpiryToMs = (value: string, fallbackMs: number): number => {
 	const match = /^(\d+)(s|m|h|d)$/.exec(value.trim());
 	if (!match) return fallbackMs;
 	const amount = Number(match[1]);
 	const unit = match[2] as "s" | "m" | "h" | "d";
-	const multipliers = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+	const multipliers = {
+		s: 1000,
+		m: 60 * 1000,
+		h: 60 * 60 * 1000,
+		d: 24 * 60 * 60 * 1000,
+	};
 	return amount * multipliers[unit];
 };
 
@@ -36,7 +40,11 @@ const setAuthCookies = (
 	refreshToken: string,
 ) => {
 	res.cookie("accessToken", accessToken, cookieOptions(accessCookieMaxAge()));
-	res.cookie("refreshToken", refreshToken, cookieOptions(refreshCookieMaxAge()));
+	res.cookie(
+		"refreshToken",
+		refreshToken,
+		cookieOptions(refreshCookieMaxAge()),
+	);
 };
 
 const clearCookieOptions = {

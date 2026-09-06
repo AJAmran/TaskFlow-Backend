@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { authenticate, requireSuperAdmin } from "../../middleware/auth";
-import { validateRequest, validateRequestWith } from "../../middleware/validateRequest";
+import {
+	validateRequest,
+	validateRequestWith,
+} from "../../middleware/validateRequest";
 import { AdminController } from "./admin.controller";
 import { AdminValidation } from "./admin.validation";
 
@@ -9,35 +12,35 @@ const router = Router();
 router.use(authenticate, requireSuperAdmin);
 
 router.get(
-  "/organizations",
-  validateRequestWith({ query: AdminValidation.listOrganizationsQuerySchema }),
-  AdminController.listOrganizations,
+	"/organizations",
+	validateRequestWith({ query: AdminValidation.listOrganizationsQuerySchema }),
+	AdminController.listOrganizations,
 );
 
 router.patch(
-  "/organizations/:id/status",
-  validateRequest(AdminValidation.updateOrganizationStatusSchema),
-  AdminController.updateOrganizationStatus,
+	"/organizations/:id/status",
+	validateRequest(AdminValidation.updateOrganizationStatusSchema),
+	AdminController.updateOrganizationStatus,
 );
 
 router.get(
-  "/users",
-  validateRequestWith({ query: AdminValidation.listUsersQuerySchema }),
-  AdminController.listUsers,
+	"/users",
+	validateRequestWith({ query: AdminValidation.listUsersQuerySchema }),
+	AdminController.listUsers,
 );
 
 router.patch(
-  "/users/:id/status",
-  validateRequest(AdminValidation.updateUserStatusSchema),
-  AdminController.updateUserStatus,
+	"/users/:id/status",
+	validateRequest(AdminValidation.updateUserStatusSchema),
+	AdminController.updateUserStatus,
 );
 
 router.get("/dashboard-stats", AdminController.dashboardStats);
 
 router.get(
-  "/audit-logs",
-  validateRequestWith({ query: AdminValidation.auditLogsQuerySchema }),
-  AdminController.auditLogs,
+	"/audit-logs",
+	validateRequestWith({ query: AdminValidation.auditLogsQuerySchema }),
+	AdminController.auditLogs,
 );
 
 export const adminRoutes = router;

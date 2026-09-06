@@ -10,12 +10,19 @@ const createToken = (
 	} as SignOptions);
 };
 
-type VerifySuccess = { success: true; data: JwtPayload & Record<string, unknown> };
+type VerifySuccess = {
+	success: true;
+	data: JwtPayload & Record<string, unknown>;
+};
 type VerifyFailure = { success: false; error: string };
 
-const verifyToken = (token: string, secret: string): VerifySuccess | VerifyFailure => {
+const verifyToken = (
+	token: string,
+	secret: string,
+): VerifySuccess | VerifyFailure => {
 	try {
-		const decoded = jwt.verify(token, secret) as JwtPayload & Record<string, unknown>;
+		const decoded = jwt.verify(token, secret) as JwtPayload &
+			Record<string, unknown>;
 		return { success: true, data: decoded };
 	} catch (error: unknown) {
 		const message = error instanceof Error ? error.message : "Invalid token";

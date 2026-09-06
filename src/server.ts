@@ -15,9 +15,9 @@ const REQUIRED_ENV = [
 const validateEnv = () => {
 	const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
 	if (missing.length > 0) {
-			console.error(
-				`Missing required environment variables: ${missing.join(", ")}. See .env.example.`,
-			);
+		console.error(
+			`Missing required environment variables: ${missing.join(", ")}. See .env.example.`,
+		);
 		process.exit(1);
 	}
 };
@@ -44,12 +44,14 @@ const main = async () => {
 		await prisma.$connect();
 		console.log("Connected to the database successfully.");
 
-
 		try {
 			if (!redisClient.isOpen) await redisClient.connect();
 			console.log("Redis Connected Successfully.");
 		} catch (redisError) {
-			console.warn("Redis connection failed, continuing without cache:", (redisError as Error).message);
+			console.warn(
+				"Redis connection failed, continuing without cache:",
+				(redisError as Error).message,
+			);
 		}
 
 		if (config.resend_api_key) {
@@ -59,14 +61,16 @@ const main = async () => {
 				await transporter.verify();
 				console.log("Nodemailer Connected Successfully.");
 			} catch (mailError) {
-				console.warn("Nodemailer verify failed, continuing:", (mailError as Error).message);
+				console.warn(
+					"Nodemailer verify failed, continuing:",
+					(mailError as Error).message,
+				);
 			}
 		}
 
 		const server = app.listen(PORT, () => {
 			console.log(`Server is running on port ${PORT}`);
 		});
-
 
 		process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 		process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));

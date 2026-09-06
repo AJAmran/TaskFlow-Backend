@@ -7,11 +7,11 @@ import { DashboardValidation } from "./dashboard.validation";
 const router = Router({ mergeParams: true });
 
 router.get(
-  "/:organizationId/dashboard",
-  authenticate,
-  requireOrgMembership,
-  validateRequestWith({ params: DashboardValidation.dashboardParamsSchema }),
-  DashboardController.getDashboard,
+	"/:organizationId/dashboard",
+	authenticate,
+	requireOrgMembership,
+	validateRequestWith({ params: DashboardValidation.dashboardParamsSchema }),
+	DashboardController.getDashboard,
 );
 
 export const dashboardRoutes = router;

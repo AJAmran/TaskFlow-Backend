@@ -34,8 +34,7 @@ export type BkashExecuteResult = {
 const baseUrl = () => config.bkash_base_url.replace(/\/$/, "");
 
 /**
- * 2026: axios-এর বদলে native fetch (Node 22+ stable)।
- * একটা dep কমে, timeout AbortController দিয়ে।
+ * Helper function to send JSON POST requests using fetch with timeout handling.
  */
 const postJson = async <T>(
 	url: string,
@@ -84,7 +83,8 @@ export const grantIdToken = async (force = false): Promise<string> => {
 		{ username: config.bkash_username, password: config.bkash_password },
 	);
 
-	if (!data?.id_token) throw new Error("bKash grant token failed: no id_token in response");
+	if (!data?.id_token)
+		throw new Error("bKash grant token failed: no id_token in response");
 
 	try {
 		if (redisClient.isOpen) {
@@ -100,7 +100,9 @@ export const grantIdToken = async (force = false): Promise<string> => {
 const isUnauthorized = (error: unknown) =>
 	(error as { status?: number })?.status === 401;
 
-const withFreshTokenRetry = async <T>(fn: (idToken: string) => Promise<T>): Promise<T> => {
+const withFreshTokenRetry = async <T>(
+	fn: (idToken: string) => Promise<T>,
+): Promise<T> => {
 	try {
 		return await fn(await grantIdToken());
 	} catch (error) {
@@ -130,13 +132,17 @@ export const createBkashPayment = async (params: {
 	);
 
 	if (!data?.paymentID || !data?.bkashURL) {
-		throw new Error(`bKash create payment failed: ${data?.statusMessage || "no paymentID/bkashURL"}`);
+		throw new Error(
+			`bKash create payment failed: ${data?.statusMessage || "no paymentID/bkashURL"}`,
+		);
 	}
 
 	return data;
 };
 
-export const executeBkashPayment = async (paymentID: string): Promise<BkashExecuteResult> => {
+export const executeBkashPayment = async (
+	paymentID: string,
+): Promise<BkashExecuteResult> => {
 	const data = await withFreshTokenRetry((idToken) =>
 		postJson<BkashExecuteResult>(
 			`${baseUrl()}/tokenized/checkout/execute`,
@@ -147,7 +153,9 @@ export const executeBkashPayment = async (paymentID: string): Promise<BkashExecu
 	return data;
 };
 
-export const queryBkashPayment = async (paymentID: string): Promise<BkashExecuteResult> => {
+export const queryBkashPayment = async (
+	paymentID: string,
+): Promise<BkashExecuteResult> => {
 	const data = await withFreshTokenRetry((idToken) =>
 		postJson<BkashExecuteResult>(
 			`${baseUrl()}/tokenized/checkout/payment/status`,

@@ -1,6 +1,13 @@
 import { Router } from "express";
-import { authenticate, requireOrgMembership, requireRole } from "../../middleware/auth";
-import { validateRequest, validateRequestWith } from "../../middleware/validateRequest";
+import {
+	authenticate,
+	requireOrgMembership,
+	requireRole,
+} from "../../middleware/auth";
+import {
+	validateRequest,
+	validateRequestWith,
+} from "../../middleware/validateRequest";
 import { OrgRole } from "../../../generated/prisma/enums";
 import { OrganizationController } from "./organization.controller";
 import { OrganizationValidation } from "./organization.validation";
@@ -8,10 +15,10 @@ import { OrganizationValidation } from "./organization.validation";
 const router = Router();
 
 router.post(
-  "/",
-  authenticate,
-  validateRequest(OrganizationValidation.createOrganizationSchema),
-  OrganizationController.createOrganization,
+	"/",
+	authenticate,
+	validateRequest(OrganizationValidation.createOrganizationSchema),
+	OrganizationController.createOrganization,
 );
 
 router.get(
@@ -22,35 +29,35 @@ router.get(
 );
 
 router.post(
-  "/invitations/accept",
-  authenticate,
-  validateRequest(OrganizationValidation.acceptInviteSchema),
-  OrganizationController.acceptInvite,
+	"/invitations/accept",
+	authenticate,
+	validateRequest(OrganizationValidation.acceptInviteSchema),
+	OrganizationController.acceptInvite,
 );
 
 router.get(
-  "/:organizationId",
-  authenticate,
-  requireOrgMembership,
-  OrganizationController.getOrganizationById,
+	"/:organizationId",
+	authenticate,
+	requireOrgMembership,
+	OrganizationController.getOrganizationById,
 );
 
 router.patch(
-  "/:organizationId",
-  authenticate,
-  requireOrgMembership,
-  requireRole(OrgRole.ORG_OWNER),
-  validateRequest(OrganizationValidation.updateOrganizationSchema),
-  OrganizationController.updateOrganization,
+	"/:organizationId",
+	authenticate,
+	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
+	validateRequest(OrganizationValidation.updateOrganizationSchema),
+	OrganizationController.updateOrganization,
 );
 
 router.post(
-  "/:organizationId/invite",
-  authenticate,
-  requireOrgMembership,
-  requireRole(OrgRole.ORG_OWNER),
-  validateRequest(OrganizationValidation.inviteMemberSchema),
-  OrganizationController.inviteMember,
+	"/:organizationId/invite",
+	authenticate,
+	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
+	validateRequest(OrganizationValidation.inviteMemberSchema),
+	OrganizationController.inviteMember,
 );
 
 router.get(
@@ -62,20 +69,20 @@ router.get(
 );
 
 router.patch(
-  "/:organizationId/members/:userId",
-  authenticate,
-  requireOrgMembership,
-  requireRole(OrgRole.ORG_OWNER),
-  validateRequest(OrganizationValidation.updateMemberRoleSchema),
-  OrganizationController.updateMemberRole,
+	"/:organizationId/members/:userId",
+	authenticate,
+	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
+	validateRequest(OrganizationValidation.updateMemberRoleSchema),
+	OrganizationController.updateMemberRole,
 );
 
 router.delete(
-  "/:organizationId/members/:userId",
-  authenticate,
-  requireOrgMembership,
-  requireRole(OrgRole.ORG_OWNER),
-  OrganizationController.removeMember,
+	"/:organizationId/members/:userId",
+	authenticate,
+	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
+	OrganizationController.removeMember,
 );
 
 export const organizationRoutes = router;

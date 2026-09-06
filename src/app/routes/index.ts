@@ -3,7 +3,10 @@ import { adminRoutes } from "../modules/admin/admin.route";
 import { authRoutes } from "../modules/auth/auth.route";
 import { dashboardRoutes } from "../modules/dashboard/dashboard.route";
 import { organizationRoutes } from "../modules/organization/organization.route";
-import { paymentRoutes, subscriptionRoutes } from "../modules/payment/payment.route";
+import {
+	paymentRoutes,
+	subscriptionRoutes,
+} from "../modules/payment/payment.route";
 import { projectRoutes } from "../modules/project/project.route";
 import { sprintRoutes } from "../modules/sprint/sprint.route";
 import { taskRoutes } from "../modules/task/task.route";
@@ -23,7 +26,5 @@ router.use("/organizations", sprintRoutes);
 router.use("/organizations", taskRoutes);
 router.use("/users", userRoutes);
 router.use("/organizations", dashboardRoutes);
-
-
 
 export default router;

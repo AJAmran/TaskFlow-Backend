@@ -3,7 +3,6 @@ import config from "../config";
 import { AppError } from "../utils/AppError";
 import httpStatus from "http-status";
 
-
 cloudinary.config({
 	cloud_name: config.cloudinary_cloud_name,
 	api_key: config.cloudinary_api_key,
@@ -17,12 +16,20 @@ export const uploadBufferToCloudinary = (
 	folder = "taskflow",
 ): Promise<{ secure_url: string; public_id: string }> => {
 	return new Promise((resolve, reject) => {
-		const stream = cloudinary.uploader.upload_stream({ folder, resource_type: "auto" }, (error, result) => {
-			if (error || !result) {
-				return reject(new AppError(httpStatus.INTERNAL_SERVER_ERROR, error?.message || "Cloudinary upload failed"));
-			}
-			resolve({ secure_url: result.secure_url, public_id: result.public_id });
-		});
+		const stream = cloudinary.uploader.upload_stream(
+			{ folder, resource_type: "auto" },
+			(error, result) => {
+				if (error || !result) {
+					return reject(
+						new AppError(
+							httpStatus.INTERNAL_SERVER_ERROR,
+							error?.message || "Cloudinary upload failed",
+						),
+					);
+				}
+				resolve({ secure_url: result.secure_url, public_id: result.public_id });
+			},
+		);
 		stream.end(buffer);
 	});
 };
@@ -30,7 +37,5 @@ export const uploadBufferToCloudinary = (
 export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
 	try {
 		await cloudinary.uploader.destroy(publicId);
-	} catch {
-
-	}
+	} catch {}
 };

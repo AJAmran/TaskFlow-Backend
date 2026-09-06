@@ -9,10 +9,10 @@ const router = Router();
 router.get("/me", authenticate, UserController.getProfile);
 
 router.patch(
-  "/me",
-  authenticate,
-  validateRequest(UserValidation.updateProfileSchema),
-  UserController.updateProfile,
+	"/me",
+	authenticate,
+	validateRequest(UserValidation.updateProfileSchema),
+	UserController.updateProfile,
 );
 
 export const userRoutes = router;
