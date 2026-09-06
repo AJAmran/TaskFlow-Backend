@@ -84,7 +84,7 @@ const WINDOW_15_MIN = 15 * 60 * 1000;
 
 export const authLimiter = rateLimit({
   windowMs: WINDOW_15_MIN,
-  max: 20,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   store: new FailoverStore("rl:auth:"),

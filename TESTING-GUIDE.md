@@ -38,7 +38,7 @@ Auth = `Authorization: Bearer <accessToken>` header (httpOnly cookies also work)
 
 Seeded org `demo-org` (PRO plan) with 1 project, 1 active sprint, 5 tasks.
 
-**Rate limits (don't spam):** auth endpoints 20 req/15 min, payment endpoints
+**Rate limits (don't spam):** auth endpoints 100 req/15 min, payment endpoints
 10 req/15 min. If you hit `429`, wait before continuing.
 
 ---

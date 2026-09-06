@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "TaskFlow — Full API",
-      "description": "Complete TaskFlow backend collection. Step-by-step manual plan: TESTING-GUIDE.md. Set baseUrl, run Auth logins first (tokens auto-save), then work top-down. Vars: accessToken (owner), memberToken, adminToken, organizationId, teamId, projectId, sprintId, taskId, subtaskId, commentId, attachmentId, paymentID (gateway, auto-saved on initiate), paymentDbId, inviteToken, memberId, testEmail/otp/resetOtp.",
+      "description": "Complete TaskFlow backend collection. Step-by-step manual plan: TESTING-GUIDE.md. Live API: https://task-flow-backend-flax.vercel.app (default baseUrl). For local testing set baseUrl to http://localhost:5000. Run Auth logins first (tokens auto-save), then work top-down. Vars: accessToken (owner), memberToken, adminToken, organizationId, teamId, projectId, sprintId, taskId, subtaskId, commentId, attachmentId, paymentID (gateway, auto-saved on initiate), paymentDbId, inviteToken, memberId, testEmail/otp/resetOtp.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:5000",
+      "value": "https://task-flow-backend-flax.vercel.app",
       "type": "string"
     },
     {
