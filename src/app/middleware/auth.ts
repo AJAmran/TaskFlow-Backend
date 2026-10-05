@@ -13,13 +13,66 @@ export interface RequestUser {
 	platformRole: PlatformRole;
 }
 
+export interface RequestOrgMembership {
+	id: string;
+	organizationId: string;
+	userId: string;
+	role: OrgRole;
+}
+
 declare global {
 	namespace Express {
 		interface Request {
 			user?: RequestUser;
+			organizationMember?: RequestOrgMembership;
 		}
 	}
 }
+
+const resolveOrganizationId = (req: Request): string | undefined =>
+	(req.params.organizationId as string) ||
+	(req.params.orgId as string) ||
+	(req.body?.organizationId as string) ||
+	(req.query?.organizationId as string);
+
+export const assertOrgAccess = async (
+	userId: string,
+	organizationId: string,
+	options: { requireOwner?: boolean } = {},
+): Promise<RequestOrgMembership> => {
+	const membership = await prisma.organizationMember.findFirst({
+		where: { organizationId, userId, deletedAt: null },
+		include: { organization: { select: { status: true, deletedAt: true } } },
+	});
+
+	if (!membership || membership.organization.deletedAt) {
+		throw new AppError(
+			httpStatus.FORBIDDEN,
+			"You are not a member of this organization.",
+		);
+	}
+
+	if (membership.organization.status !== "ACTIVE") {
+		throw new AppError(
+			httpStatus.FORBIDDEN,
+			"This workspace is suspended. Contact support to restore access.",
+		);
+	}
+
+	if (options.requireOwner && membership.role !== "ORG_OWNER") {
+		throw new AppError(
+			httpStatus.FORBIDDEN,
+			"Only workspace owners can perform this action.",
+		);
+	}
+
+	return {
+		id: membership.id,
+		organizationId: membership.organizationId,
+		userId: membership.userId,
+		role: membership.role,
+	};
+};
 
 const extractToken = (req: Request): string | undefined => {
 	if (req.cookies?.accessToken) return req.cookies.accessToken as string;
@@ -51,7 +104,7 @@ export const authenticate = async (
 			);
 		}
 
-		const { userId, email, name, platformRole } = verified.data as {
+		const { userId, email } = verified.data as {
 			userId: string;
 			email: string;
 			name: string;
@@ -62,8 +115,8 @@ export const authenticate = async (
 			throw new AppError(httpStatus.UNAUTHORIZED, "Invalid token payload.");
 		}
 
-		const user = await prisma.user.findUnique({ where: { email } });
-		if (!user || user.deletedAt) {
+		const user = await prisma.user.findUnique({ where: { id: userId } });
+		if (!user || user.deletedAt || user.email !== email) {
 			throw new AppError(
 				httpStatus.UNAUTHORIZED,
 				"User not found. Please log in again.",
@@ -76,7 +129,12 @@ export const authenticate = async (
 			);
 		}
 
-		req.user = { userId, email, name, platformRole };
+		req.user = {
+			userId: user.id,
+			email: user.email,
+			name: user.name,
+			platformRole: user.platformRole,
+		};
 		next();
 	} catch (error) {
 		next(error);
@@ -108,11 +166,7 @@ export const requireRole = (...allowedRoles: OrgRole[]) => {
 			if (!req.user)
 				throw new AppError(httpStatus.UNAUTHORIZED, "Not authenticated.");
 
-			const organizationId =
-				(req.params.organizationId as string) ||
-				(req.params.orgId as string) ||
-				(req.body?.organizationId as string) ||
-				(req.query?.organizationId as string);
+			const organizationId = resolveOrganizationId(req);
 
 			if (!organizationId) {
 				throw new AppError(
@@ -121,18 +175,14 @@ export const requireRole = (...allowedRoles: OrgRole[]) => {
 				);
 			}
 
-			const membership = await prisma.organizationMember.findUnique({
-				where: {
-					organizationId_userId: { organizationId, userId: req.user.userId },
-				},
-			});
-
-			if (!membership || membership.deletedAt) {
-				throw new AppError(
-					httpStatus.FORBIDDEN,
-					"You are not a member of this organization.",
-				);
-			}
+		const membership = await assertOrgAccess(
+			req.user.userId,
+			organizationId,
+			{
+				requireOwner:
+					allowedRoles.length === 1 && allowedRoles[0] === "ORG_OWNER",
+			},
+		);
 
 			if (allowedRoles.length > 0 && !allowedRoles.includes(membership.role)) {
 				throw new AppError(
@@ -141,6 +191,7 @@ export const requireRole = (...allowedRoles: OrgRole[]) => {
 				);
 			}
 
+			req.organizationMember = membership;
 			next();
 		} catch (error) {
 			next(error);
@@ -157,30 +208,16 @@ export const requireOrgMembership = async (
 		if (!req.user)
 			throw new AppError(httpStatus.UNAUTHORIZED, "Not authenticated.");
 
-		const organizationId =
-			(req.params.organizationId as string) ||
-			(req.params.orgId as string) ||
-			(req.body?.organizationId as string) ||
-			(req.query?.organizationId as string);
+		const organizationId = resolveOrganizationId(req);
 
 		if (!organizationId) {
 			throw new AppError(httpStatus.BAD_REQUEST, "organizationId is required.");
 		}
 
-		const membership = await prisma.organizationMember.findUnique({
-			where: {
-				organizationId_userId: { organizationId, userId: req.user.userId },
-			},
-		});
-
-		if (!membership || membership.deletedAt) {
-			throw new AppError(
-				httpStatus.FORBIDDEN,
-				"You are not a member of this organization.",
-			);
-		}
-
-		(req as unknown as Record<string, unknown>).organizationMember = membership;
+		req.organizationMember = await assertOrgAccess(
+			req.user.userId,
+			organizationId,
+		);
 		next();
 	} catch (error) {
 		next(error);

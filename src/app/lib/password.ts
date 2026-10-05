@@ -2,10 +2,6 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import config from "../config";
 
-/**
- * Password hashing and verification utilities.
- * Handles normalization for passwords longer than bcrypt's 72-byte limit.
- */
 const BCRYPT_MAX_BYTES = 72;
 
 const normalizePassword = (password: string): string => {

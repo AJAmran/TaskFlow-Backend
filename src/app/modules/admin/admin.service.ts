@@ -130,7 +130,10 @@ const updateUserStatus = async (
 	targetUserId: string,
 	isActive: boolean,
 ) => {
-	const target = await prisma.user.findUnique({ where: { id: targetUserId } });
+	const target = await prisma.user.findUnique({
+		where: { id: targetUserId },
+		omit: { password: true },
+	});
 	if (!target || target.deletedAt)
 		throw new AppError(httpStatus.NOT_FOUND, "User not found");
 	if (target.platformRole === "SUPER_ADMIN") {

@@ -4,7 +4,7 @@ import path from "node:path";
 dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 const config = {
-	node_env: (process.env.NODE_ENV as string) || "development",
+	node_env: (process.env.NODE_ENV as string) || "production",
 	port: Number(process.env.PORT) || 5000,
 	database_url: process.env.DATABASE_URL as string,
 	backend_url: process.env.BACKEND_URL as string,
@@ -41,7 +41,6 @@ const config = {
 	bkash_callback_url: process.env.BKASH_CALLBACK_URL as string,
 } as const;
 
-// Environment validation for secrets in production
 const isProd = config.node_env === "production";
 for (const key of ["jwt_access_secret", "jwt_refresh_secret"] as const) {
 	const val = config[key];

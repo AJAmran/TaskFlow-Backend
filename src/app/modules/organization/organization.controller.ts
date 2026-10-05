@@ -25,7 +25,7 @@ const getMyOrganizations = catchAsync(async (req: Request, res: Response) => {
 	if (!user) throw new AppError(httpStatus.UNAUTHORIZED, "Not authenticated");
 	const result = await OrganizationService.getMyOrganizations(
 		user.userId,
-		req.query as { page?: number; limit?: number },
+		req.query as { page?: number; limit?: number; search?: string },
 	);
 	sendResponse(res, {
 		statusCode: httpStatus.OK,

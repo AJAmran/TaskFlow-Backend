@@ -194,7 +194,7 @@ Verify strict 3-role permission boundaries (`SUPER_ADMIN`, `ORG_OWNER`, `MEMBER`
 
 ### 7.3 Assign Task to Member
 - **Endpoint:** `POST /api/v1/organizations/:organizationId/projects/:projectId/tasks/:taskId/assign`
-- **Request Body:** `{ "assigneeId": "<member_user_id>" }`
+- **Request Body:** `{ "userId": "<member_user_id>" }` (`null` unassigns)
 - **Expect:** `200 OK`.
 
 ### 7.4 Add Comment

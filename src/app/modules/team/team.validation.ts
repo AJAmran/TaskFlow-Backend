@@ -27,5 +27,6 @@ export const TeamValidation = {
 	paginationQuerySchema: z.object({
 		page: z.coerce.number().int().positive().optional().default(1),
 		limit: z.coerce.number().int().positive().max(100).optional().default(10),
+		search: z.string().trim().max(100).optional(),
 	}),
 };

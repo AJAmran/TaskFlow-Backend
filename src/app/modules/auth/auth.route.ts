@@ -1,6 +1,15 @@
 import { Router } from "express";
 import { authenticate } from "../../middleware/auth";
-import { authLimiter } from "../../middleware/rateLimit";
+import {
+	authLimiter,
+	forgotPasswordLimiter,
+	googleAuthLimiter,
+	loginLimiter,
+	otpResendLimiter,
+	otpVerifyLimiter,
+	refreshTokenLimiter,
+	registerLimiter,
+} from "../../middleware/rateLimit";
 import { validateRequest } from "../../middleware/validateRequest";
 import { AuthController } from "./auth.controller";
 import { AuthValidation } from "./auth.validation";
@@ -9,63 +18,63 @@ const router = Router();
 
 router.post(
 	"/register",
-	authLimiter,
+	registerLimiter,
 	validateRequest(AuthValidation.registerSchema),
 	AuthController.register,
 );
 
 router.post(
 	"/login",
-	authLimiter,
+	loginLimiter,
 	validateRequest(AuthValidation.loginSchema),
 	AuthController.login,
 );
 
 router.post(
 	"/google",
-	authLimiter,
+	googleAuthLimiter,
 	validateRequest(AuthValidation.googleLoginSchema),
 	AuthController.googleLogin,
 );
 
 router.post(
 	"/social-login",
-	authLimiter,
+	googleAuthLimiter,
 	validateRequest(AuthValidation.googleLoginSchema),
 	AuthController.googleLogin,
 );
 
 router.post(
 	"/verify-email",
-	authLimiter,
+	otpVerifyLimiter,
 	validateRequest(AuthValidation.verifyEmailSchema),
 	AuthController.verifyEmail,
 );
 
 router.post(
 	"/resend-otp",
-	authLimiter,
+	otpResendLimiter,
 	validateRequest(AuthValidation.resendOtpSchema),
 	AuthController.resendOtp,
 );
 
 router.post(
 	"/forgot-password",
-	authLimiter,
+	forgotPasswordLimiter,
 	validateRequest(AuthValidation.forgotPasswordSchema),
 	AuthController.forgotPassword,
 );
 
 router.post(
 	"/reset-password",
-	authLimiter,
+	otpVerifyLimiter,
 	validateRequest(AuthValidation.resetPasswordSchema),
 	AuthController.resetPassword,
 );
 
-router.post("/refresh-token", AuthController.refreshToken);
+router.post("/refresh-token", refreshTokenLimiter, AuthController.refreshToken);
 
-router.post("/logout", AuthController.logout);
+router.post("/logout", authLimiter, AuthController.logout);
 
 router.get("/me", authenticate, AuthController.getMe);
 

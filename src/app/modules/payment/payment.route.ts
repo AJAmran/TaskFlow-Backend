@@ -26,6 +26,7 @@ router.post(
 
 router.get(
 	"/callback",
+	paymentLimiter,
 	validateRequestWith({ query: PaymentValidation.callbackQuerySchema }),
 	PaymentController.callback,
 );

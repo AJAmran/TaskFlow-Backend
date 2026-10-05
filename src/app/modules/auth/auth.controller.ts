@@ -80,8 +80,6 @@ const login = catchAsync(async (req: Request, res: Response) => {
 		message: "User logged in successfully",
 		data: {
 			user: result.user,
-			accessToken: result.accessToken,
-			refreshToken: result.refreshToken,
 		},
 	});
 });
@@ -99,10 +97,7 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
 		statusCode: httpStatus.OK,
 		success: true,
 		message: "New tokens generated successfully",
-		data: {
-			accessToken,
-			refreshToken: newRefreshToken,
-		},
+		data: null,
 	});
 });
 
@@ -128,8 +123,6 @@ const googleLogin = catchAsync(async (req: Request, res: Response) => {
 		message: "Google login successful",
 		data: {
 			user: result.user,
-			accessToken: result.accessToken,
-			refreshToken: result.refreshToken,
 		},
 	});
 });
@@ -173,8 +166,6 @@ const verifyEmail = catchAsync(async (req: Request, res: Response) => {
 		message: "Email verified successfully",
 		data: {
 			user: result.user,
-			accessToken: result.accessToken,
-			refreshToken: result.refreshToken,
 		},
 	});
 });

@@ -61,9 +61,7 @@ export const TaskValidation = {
 	}),
 
 	assignTaskSchema: z.object({
-		userId: z
-			.string({ message: "userId is required" })
-			.uuid("userId must be a valid UUID"),
+		userId: z.string({ message: "userId is required" }).uuid("userId must be a valid UUID").nullable(),
 	}),
 
 	createSubtaskSchema: z.object({

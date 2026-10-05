@@ -86,31 +86,82 @@ const tooManyHandler = (
 };
 
 const WINDOW_15_MIN = 15 * 60 * 1000;
+const WINDOW_1_HOUR = 60 * 60 * 1000;
 
-export const authLimiter = rateLimit({
-	windowMs: WINDOW_15_MIN,
-	max: 150,
-	standardHeaders: true,
-	legacyHeaders: false,
-	store: new FailoverStore("rl:auth:"),
-	handler: (_req, res) =>
-		tooManyHandler(
-			_req,
-			res,
-			"Too many auth requests. Please try again later.",
-		),
-});
+const buildAuthLimiter = (
+	name: string,
+	max: number,
+	windowMs: number,
+	message: string,
+) =>
+	rateLimit({
+		windowMs,
+		max,
+		standardHeaders: true,
+		legacyHeaders: false,
+		store: new FailoverStore(`rl:${name}:`),
+		handler: (_req, res) => tooManyHandler(_req, res, message),
+	});
 
-export const paymentLimiter = rateLimit({
-	windowMs: WINDOW_15_MIN,
-	max: 150,
-	standardHeaders: true,
-	legacyHeaders: false,
-	store: new FailoverStore("rl:payment:"),
-	handler: (_req, res) =>
-		tooManyHandler(
-			_req,
-			res,
-			"Too many payment requests. Please try again later.",
-		),
-});
+export const loginLimiter = buildAuthLimiter(
+	"login",
+	10,
+	WINDOW_15_MIN,
+	"Too many login attempts. Please try again in a few minutes.",
+);
+
+export const registerLimiter = buildAuthLimiter(
+	"register",
+	5,
+	WINDOW_1_HOUR,
+	"Too many accounts created from this network. Please try again later.",
+);
+
+export const otpVerifyLimiter = buildAuthLimiter(
+	"otp-verify",
+	15,
+	WINDOW_15_MIN,
+	"Too many verification attempts. Please request a new code.",
+);
+
+export const otpResendLimiter = buildAuthLimiter(
+	"otp-resend",
+	5,
+	WINDOW_1_HOUR,
+	"Too many codes requested. Please try again later.",
+);
+
+export const forgotPasswordLimiter = buildAuthLimiter(
+	"forgot-password",
+	5,
+	WINDOW_1_HOUR,
+	"Too many reset requests. Please try again later.",
+);
+
+export const refreshTokenLimiter = buildAuthLimiter(
+	"refresh-token",
+	30,
+	WINDOW_15_MIN,
+	"Too many session refreshes. Please sign in again.",
+);
+
+export const googleAuthLimiter = buildAuthLimiter(
+	"google",
+	20,
+	WINDOW_15_MIN,
+	"Too many sign-in attempts. Please try again later.",
+);
+
+export const authLimiter = buildAuthLimiter(
+	"auth",
+	150,
+	WINDOW_15_MIN,
+	"Too many auth requests. Please try again later.",
+);
+
+export const paymentLimiter = buildAuthLimiter(
+	"payment",
+	30,
+	WINDOW_15_MIN,
+	"Too many payment requests. Please try again later.",
+);

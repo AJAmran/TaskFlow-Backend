@@ -4,6 +4,8 @@ model Project {
   teamId         String?
   name           String
   description    String?
+  startDate      DateTime?
+  endDate        DateTime?
   status         ProjectStatus @default(ACTIVE)
   deletedAt      DateTime?
   createdAt      DateTime      @default(now())

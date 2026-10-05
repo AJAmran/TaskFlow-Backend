@@ -78,6 +78,15 @@ const main = async () => {
 			console.error("Unhandled Rejection:", reason);
 		});
 		process.on("uncaughtException", async (error) => {
+			const code = (error as NodeJS.ErrnoException)?.code;
+			if (
+				code === "ECONNRESET" ||
+				code === "EPIPE" ||
+				code === "ECONNABORTED"
+			) {
+				console.warn(`Benign connection error ignored (${code}).`);
+				return;
+			}
 			console.error("Uncaught Exception:", error);
 			server.close(async () => {
 				await gracefulShutdown("uncaughtException");

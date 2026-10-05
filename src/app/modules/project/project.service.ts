@@ -1,36 +1,16 @@
 import httpStatus from "http-status";
-import { OrgRole, type ProjectStatus } from "../../../generated/prisma/enums";
+import type { ProjectStatus } from "../../../generated/prisma/enums";
+import { assertOrgAccess } from "../../middleware/auth";
 import { invalidateOrgDashboard } from "../../lib/cache";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { calculatePagination } from "../../utils/pagination";
 
-const ensureOrgMembership = async (
+const ensureOrgMembership = (
 	userId: string,
 	organizationId: string,
 	requireOwner = false,
-) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
-	if (requireOwner && membership.role !== OrgRole.ORG_OWNER) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"Only ORG_OWNER can perform this action",
-		);
-	}
-	const org = await prisma.organization.findFirst({
-		where: { id: organizationId, deletedAt: null },
-	});
-	if (!org) throw new AppError(httpStatus.NOT_FOUND, "Organization not found");
-	return membership;
-};
+) => assertOrgAccess(userId, organizationId, { requireOwner });
 
 const ensureProject = async (organizationId: string, projectId: string) => {
 	const project = await prisma.project.findFirst({
@@ -43,7 +23,13 @@ const ensureProject = async (organizationId: string, projectId: string) => {
 const createProject = async (
 	userId: string,
 	organizationId: string,
-	payload: { name: string; description?: string; teamId?: string },
+	payload: {
+		name: string;
+		description?: string;
+		teamId?: string;
+		startDate?: Date;
+		endDate?: Date;
+	},
 ) => {
 	const membership = await ensureOrgMembership(userId, organizationId);
 
@@ -58,55 +44,62 @@ const createProject = async (
 			);
 	}
 
-	const result = await prisma.$transaction(async (tx) => {
-		const subscription = await tx.subscription.findUnique({
-			where: { organizationId },
-		});
-		if (!subscription)
-			throw new AppError(
-				httpStatus.NOT_FOUND,
-				"Organization subscription not found",
-			);
+	const result = await prisma.$transaction(
+		async (tx) => {
+			await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`;
+
+			const subscription = await tx.subscription.findUnique({
+				where: { organizationId },
+			});
+			if (!subscription)
+				throw new AppError(
+					httpStatus.NOT_FOUND,
+					"Organization subscription not found",
+				);
 
 		const projectCount = await tx.project.count({
-			where: { organizationId, deletedAt: null },
-		});
-		if (projectCount >= subscription.maxProjects) {
-			throw new AppError(
-				httpStatus.FORBIDDEN,
-				`Project limit reached (${subscription.maxProjects}) for ${subscription.plan} plan. Please upgrade.`,
-			);
-		}
+				where: { organizationId, deletedAt: null },
+			});
+			if (projectCount >= subscription.maxProjects) {
+				throw new AppError(
+					httpStatus.FORBIDDEN,
+					`Project limit reached (${subscription.maxProjects}) for ${subscription.plan} plan. Please upgrade.`,
+				);
+			}
 
-		const project = await tx.project.create({
-			data: {
-				organizationId,
-				name: payload.name.trim(),
-				...(payload.description !== undefined && {
-					description: payload.description,
-				}),
-				...(payload.teamId && { teamId: payload.teamId }),
-			},
-		});
+			const project = await tx.project.create({
+				data: {
+					organizationId,
+					name: payload.name.trim(),
+					...(payload.description !== undefined && {
+						description: payload.description,
+					}),
+					...(payload.startDate && { startDate: payload.startDate }),
+					...(payload.endDate && { endDate: payload.endDate }),
+					...(payload.teamId && { teamId: payload.teamId }),
+				},
+			});
 
-		await tx.projectMember.create({
-			data: {
-				projectId: project.id,
-				userId,
-				role: membership.role,
-			},
-		});
+			await tx.projectMember.create({
+				data: {
+					projectId: project.id,
+					userId,
+					role: membership.role,
+				},
+			});
 
-		await tx.activityLog.create({
-			data: {
-				userId,
-				action: "PROJECT_CREATED",
-				meta: { organizationId, projectId: project.id, name: project.name },
-			},
-		});
+			await tx.activityLog.create({
+				data: {
+					userId,
+					action: "PROJECT_CREATED",
+					meta: { organizationId, projectId: project.id, name: project.name },
+				},
+			});
 
-		return project;
-	});
+			return project;
+		},
+		{ isolationLevel: "Serializable" },
+	);
 
 	await invalidateOrgDashboard(organizationId);
 
@@ -121,6 +114,7 @@ const listProjects = async (
 		limit?: number;
 		status?: ProjectStatus;
 		teamId?: string;
+		search?: string;
 		sortBy?: string;
 		sortOrder?: "asc" | "desc";
 	},
@@ -134,18 +128,31 @@ const listProjects = async (
 		: "createdAt";
 	const sortOrder = query.sortOrder === "asc" ? "asc" : "desc";
 
+	const search = query.search?.trim();
+
 	const where = {
 		organizationId,
 		deletedAt: null,
 		...(query.status && { status: query.status }),
 		...(query.teamId && { teamId: query.teamId }),
+		...(search && {
+			OR: [
+				{ name: { contains: search, mode: "insensitive" as const } },
+				{
+					description: {
+						contains: search,
+						mode: "insensitive" as const,
+					},
+				},
+			],
+		}),
 	};
 
 	const [projects, total] = await Promise.all([
 		prisma.project.findMany({
 			where,
 			include: {
-				team: { select: { id: true, name: true } },
+				team: { where: { deletedAt: null }, select: { id: true, name: true } },
 				_count: {
 					select: {
 						members: true,
@@ -176,13 +183,14 @@ const getProjectById = async (
 	const project = await prisma.project.findFirst({
 		where: { id: projectId, organizationId, deletedAt: null },
 		include: {
-			team: { select: { id: true, name: true } },
+			team: { where: { deletedAt: null }, select: { id: true, name: true } },
 			members: {
 				include: {
 					user: {
 						select: { id: true, name: true, email: true, profileImage: true },
 					},
 				},
+				take: 200,
 			},
 			_count: {
 				select: {
@@ -205,10 +213,23 @@ const updateProject = async (
 		description?: string | null;
 		status?: ProjectStatus;
 		teamId?: string | null;
+		startDate?: Date | null;
+		endDate?: Date | null;
 	},
 ) => {
 	await ensureOrgMembership(userId, organizationId);
-	await ensureProject(organizationId, projectId);
+	const current = await ensureProject(organizationId, projectId);
+
+	const nextStart =
+		payload.startDate !== undefined ? payload.startDate : current.startDate;
+	const nextEnd =
+		payload.endDate !== undefined ? payload.endDate : current.endDate;
+	if (nextStart && nextEnd && nextStart >= nextEnd) {
+		throw new AppError(
+			httpStatus.BAD_REQUEST,
+			"startDate must be before endDate",
+		);
+	}
 
 	if (payload.teamId !== undefined && payload.teamId !== null) {
 		const team = await prisma.team.findFirst({
@@ -221,24 +242,32 @@ const updateProject = async (
 			);
 	}
 
-	const updated = await prisma.project.update({
-		where: { id: projectId },
-		data: {
-			...(payload.name !== undefined && { name: payload.name.trim() }),
-			...(payload.description !== undefined && {
-				description: payload.description,
-			}),
-			...(payload.status !== undefined && { status: payload.status }),
-			...(payload.teamId !== undefined && { teamId: payload.teamId }),
-		},
-	});
+	const updated = await prisma.$transaction(async (tx) => {
+		const project = await tx.project.update({
+			where: { id: projectId },
+			data: {
+				...(payload.name !== undefined && { name: payload.name.trim() }),
+				...(payload.description !== undefined && {
+					description: payload.description,
+				}),
+				...(payload.status !== undefined && { status: payload.status }),
+				...(payload.teamId !== undefined && { teamId: payload.teamId }),
+				...(payload.startDate !== undefined && {
+					startDate: payload.startDate,
+				}),
+				...(payload.endDate !== undefined && { endDate: payload.endDate }),
+			},
+		});
 
-	await prisma.activityLog.create({
-		data: {
-			userId,
-			action: "PROJECT_UPDATED",
-			meta: { organizationId, projectId, changes: payload },
-		},
+		await tx.activityLog.create({
+			data: {
+				userId,
+				action: "PROJECT_UPDATED",
+				meta: { organizationId, projectId, changes: payload },
+			},
+		});
+
+		return project;
 	});
 
 	await invalidateOrgDashboard(organizationId);
@@ -277,6 +306,11 @@ const softDeleteProject = async (
 			data: { deletedAt: now },
 		});
 
+		await tx.comment.updateMany({
+			where: { task: { projectId }, deletedAt: null },
+			data: { deletedAt: now },
+		});
+
 		await tx.activityLog.create({
 			data: {
 				userId,
@@ -298,15 +332,14 @@ const addProjectMember = async (
 	organizationId: string,
 	projectId: string,
 	targetUserId: string,
-	role?: OrgRole,
 ) => {
-	await ensureOrgMembership(userId, organizationId);
+	await ensureOrgMembership(userId, organizationId, true);
 	await ensureProject(organizationId, projectId);
 
-	const orgMember = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId: targetUserId } },
+	const orgMember = await prisma.organizationMember.findFirst({
+		where: { organizationId, userId: targetUserId, deletedAt: null },
 	});
-	if (!orgMember || orgMember.deletedAt) {
+	if (!orgMember) {
 		throw new AppError(
 			httpStatus.BAD_REQUEST,
 			"Target user is not a member of this organization",
@@ -328,7 +361,7 @@ const addProjectMember = async (
 		);
 
 	const member = await prisma.projectMember.create({
-		data: { projectId, userId: targetUserId, role: role || orgMember.role },
+		data: { projectId, userId: targetUserId, role: orgMember.role },
 	});
 
 	await prisma.activityLog.create({
@@ -389,7 +422,7 @@ const removeProjectMember = async (
 	projectId: string,
 	targetUserId: string,
 ) => {
-	await ensureOrgMembership(userId, organizationId);
+	await ensureOrgMembership(userId, organizationId, true);
 	await ensureProject(organizationId, projectId);
 
 	const member = await prisma.projectMember.findUnique({
@@ -398,26 +431,26 @@ const removeProjectMember = async (
 	if (!member)
 		throw new AppError(httpStatus.NOT_FOUND, "Project member not found");
 
-	const memberCount = await prisma.projectMember.count({
-		where: { projectId },
-	});
-	if (memberCount <= 1) {
-		throw new AppError(
-			httpStatus.BAD_REQUEST,
-			"Cannot remove the last member of the project",
-		);
-	}
+	await prisma.$transaction(async (tx) => {
+		await tx.projectMember.delete({
+			where: { projectId_userId: { projectId, userId: targetUserId } },
+		});
 
-	await prisma.projectMember.delete({
-		where: { projectId_userId: { projectId, userId: targetUserId } },
-	});
+		const remaining = await tx.projectMember.count({ where: { projectId } });
+		if (remaining === 0) {
+			throw new AppError(
+				httpStatus.BAD_REQUEST,
+				"Cannot remove the last member of the project",
+			);
+		}
 
-	await prisma.activityLog.create({
-		data: {
-			userId,
-			action: "PROJECT_MEMBER_REMOVED",
-			meta: { organizationId, projectId, targetUserId },
-		},
+		await tx.activityLog.create({
+			data: {
+				userId,
+				action: "PROJECT_MEMBER_REMOVED",
+				meta: { organizationId, projectId, targetUserId },
+			},
+		});
 	});
 
 	await invalidateOrgDashboard(organizationId);

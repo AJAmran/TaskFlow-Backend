@@ -4,6 +4,7 @@ import {
 	TaskPriority,
 	TaskStatus,
 } from "../../../generated/prisma/enums";
+import { assertOrgAccess } from "../../middleware/auth";
 import { invalidateOrgDashboard } from "../../lib/cache";
 import {
 	deleteFromCloudinary,
@@ -24,22 +25,8 @@ const NEXT_STATUS: Record<TaskStatus, TaskStatus | null> = {
 	[TaskStatus.DONE]: null,
 };
 
-const ensureMembership = async (userId: string, organizationId: string) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
-	const org = await prisma.organization.findFirst({
-		where: { id: organizationId, deletedAt: null },
-	});
-	if (!org) throw new AppError(httpStatus.NOT_FOUND, "Organization not found");
-	return membership;
-};
+const ensureMembership = (userId: string, organizationId: string) =>
+	assertOrgAccess(userId, organizationId);
 
 const ensureProject = async (organizationId: string, projectId: string) => {
 	const project = await prisma.project.findFirst({
@@ -250,15 +237,20 @@ const getTaskById = async (
 				select: { id: true, name: true, email: true, profileImage: true },
 			},
 			sprint: { select: { id: true, name: true, status: true } },
-			subtasks: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } },
+			subtasks: {
+				where: { deletedAt: null },
+				orderBy: { createdAt: "asc" },
+				take: 200,
+			},
 			comments: {
 				where: { deletedAt: null },
 				include: {
 					user: { select: { id: true, name: true, profileImage: true } },
 				},
 				orderBy: { createdAt: "asc" },
+				take: 200,
 			},
-			attachments: { orderBy: { createdAt: "desc" } },
+			attachments: { orderBy: { createdAt: "desc" }, take: 100 },
 		},
 	});
 	if (!task) throw new AppError(httpStatus.NOT_FOUND, "Task not found");
@@ -333,10 +325,19 @@ const changeStatus = async (
 		);
 	}
 
-	const updated = await prisma.task.update({
-		where: { id: taskId },
+	const result = await prisma.task.updateMany({
+		where: { id: taskId, status: task.status, deletedAt: null },
 		data: { status },
 	});
+	if (result.count === 0) {
+		throw new AppError(
+			httpStatus.CONFLICT,
+			"Task status changed by someone else. Reload and try again.",
+		);
+	}
+
+	const updated = await prisma.task.findUnique({ where: { id: taskId } });
+	if (!updated) throw new AppError(httpStatus.NOT_FOUND, "Task not found");
 
 	await prisma.activityLog.create({
 		data: {
@@ -362,10 +363,35 @@ const assignTask = async (
 	organizationId: string,
 	projectId: string,
 	taskId: string,
-	assigneeId: string,
+	assigneeId: string | null,
 ) => {
 	await ensureMembership(userId, organizationId);
 	await ensureTask(organizationId, projectId, taskId);
+
+	if (assigneeId === null) {
+		const updated = await prisma.task.update({
+			where: { id: taskId },
+			data: { assigneeId: null },
+			include: {
+				assignee: {
+					select: { id: true, name: true, email: true, profileImage: true },
+				},
+			},
+		});
+
+		await prisma.activityLog.create({
+			data: {
+				userId,
+				taskId,
+				action: "TASK_UNASSIGNED",
+				meta: { organizationId, projectId, taskId },
+			},
+		});
+
+		await invalidateOrgDashboard(organizationId);
+		return updated;
+	}
+
 	await ensureAssigneeIsProjectMember(projectId, assigneeId);
 
 	const updated = await prisma.task.update({
@@ -458,6 +484,7 @@ const listSubtasks = async (
 	return prisma.subtask.findMany({
 		where: { taskId, deletedAt: null },
 		orderBy: { createdAt: "asc" },
+		take: 200,
 	});
 };
 
@@ -591,6 +618,8 @@ const deleteComment = async (
 	return updated;
 };
 
+const MAX_ATTACHMENTS_PER_TASK = 100;
+
 const uploadAttachment = async (
 	userId: string,
 	organizationId: string,
@@ -601,20 +630,36 @@ const uploadAttachment = async (
 	await ensureMembership(userId, organizationId);
 	await ensureTask(organizationId, projectId, taskId);
 
+	const attachmentCount = await prisma.attachment.count({ where: { taskId } });
+	if (attachmentCount >= MAX_ATTACHMENTS_PER_TASK) {
+		throw new AppError(
+			httpStatus.BAD_REQUEST,
+			`Attachment limit reached (${MAX_ATTACHMENTS_PER_TASK} per task). Delete an existing file to upload a new one.`,
+		);
+	}
+
 	const uploaded = await uploadBufferToCloudinary(
 		file.buffer,
 		`taskflow/${organizationId}/${taskId}`,
 	);
 
-	const attachment = await prisma.attachment.create({
-		data: {
-			taskId,
-			url: uploaded.secure_url,
-			publicId: uploaded.public_id,
-			fileName: file.originalname,
-			uploadedBy: userId,
-		},
-	});
+	let attachment: Awaited<ReturnType<typeof prisma.attachment.create>>;
+	try {
+		attachment = await prisma.attachment.create({
+			data: {
+				taskId,
+				url: uploaded.secure_url,
+				publicId: uploaded.public_id,
+				fileName: file.originalname,
+				uploadedBy: userId,
+			},
+		});
+	} catch (error) {
+		try {
+			await deleteFromCloudinary(uploaded.public_id);
+		} catch {}
+		throw error;
+	}
 
 	await prisma.activityLog.create({
 		data: {
@@ -646,6 +691,7 @@ const listAttachments = async (
 	return prisma.attachment.findMany({
 		where: { taskId },
 		orderBy: { createdAt: "desc" },
+		take: 100,
 	});
 };
 
@@ -674,8 +720,18 @@ const deleteAttachment = async (
 		);
 	}
 
-	if (attachment.publicId) await deleteFromCloudinary(attachment.publicId);
 	await prisma.attachment.delete({ where: { id: attachmentId } });
+
+	if (attachment.publicId) {
+		try {
+			await deleteFromCloudinary(attachment.publicId);
+		} catch (error) {
+			console.error(
+				`Attachment ${attachmentId} removed locally but the cloud asset ${attachment.publicId} could not be destroyed:`,
+				(error as Error).message,
+			);
+		}
+	}
 
 	await invalidateOrgDashboard(organizationId);
 	return null;

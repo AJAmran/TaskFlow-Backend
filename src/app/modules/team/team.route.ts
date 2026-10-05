@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { authenticate, requireOrgMembership } from "../../middleware/auth";
+import { OrgRole } from "../../../generated/prisma/enums";
+import {
+	authenticate,
+	requireOrgMembership,
+	requireRole,
+} from "../../middleware/auth";
 import {
 	validateRequest,
 	validateRequestWith,
@@ -36,6 +41,7 @@ router.patch(
 	"/:organizationId/teams/:teamId",
 	authenticate,
 	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
 	validateRequest(TeamValidation.updateTeamSchema),
 	TeamController.updateTeam,
 );
@@ -44,6 +50,7 @@ router.delete(
 	"/:organizationId/teams/:teamId",
 	authenticate,
 	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
 	TeamController.softDeleteTeam,
 );
 
@@ -51,6 +58,7 @@ router.post(
 	"/:organizationId/teams/:teamId/members",
 	authenticate,
 	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
 	validateRequest(TeamValidation.addTeamMemberSchema),
 	TeamController.addTeamMember,
 );
@@ -67,6 +75,7 @@ router.delete(
 	"/:organizationId/teams/:teamId/members/:userId",
 	authenticate,
 	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
 	TeamController.removeTeamMember,
 );
 

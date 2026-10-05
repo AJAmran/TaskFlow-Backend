@@ -11,8 +11,8 @@ export const executePaymentSchema = z.object({
 });
 
 export const callbackQuerySchema = z.object({
-	paymentID: z.string().optional(),
-	status: z.string().optional(),
+	paymentID: z.string().min(1, "paymentID is required").optional(),
+	status: z.enum(["success", "cancel", "failure"]).optional(),
 });
 
 export const PaymentValidation = {

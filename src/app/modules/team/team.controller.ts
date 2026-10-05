@@ -29,7 +29,7 @@ const listTeams = catchAsync(async (req: Request, res: Response) => {
 	const result = await TeamService.listTeams(
 		user.userId,
 		organizationId as string,
-		req.query as { page?: number; limit?: number },
+		req.query as { page?: number; limit?: number; search?: string },
 	);
 	sendResponse(res, {
 		statusCode: httpStatus.OK,

@@ -3,7 +3,6 @@ import httpStatus from "http-status";
 import multer from "multer";
 import { ZodError } from "zod";
 import { Prisma } from "../../generated/prisma/client";
-import config from "../config";
 import { AppError } from "../utils/AppError";
 
 type TErrorSource = { path: string; message: string };
@@ -14,9 +13,13 @@ export const globalErrorHandler = (
 	res: Response,
 	_next: NextFunction,
 ) => {
-	const isDevelopment = config.node_env === "development";
+	const isDevelopment = process.env.NODE_ENV === "development";
 
-	console.error("GlobalErrorHandler:", err);
+	if (err instanceof Prisma.PrismaClientKnownRequestError) {
+		console.error("GlobalErrorHandler: prisma error", err.code);
+	} else {
+		console.error("GlobalErrorHandler:", err);
+	}
 
 	let statusCode: number = httpStatus.INTERNAL_SERVER_ERROR;
 	let message = "Internal Server Error";
@@ -62,6 +65,11 @@ export const globalErrorHandler = (
 			case "P2025":
 				statusCode = httpStatus.NOT_FOUND;
 				message = "Requested record was not found";
+				break;
+			case "P2034":
+				statusCode = httpStatus.CONFLICT;
+				message =
+					"Conflicting concurrent update. Please retry the request.";
 				break;
 			default:
 				statusCode = httpStatus.BAD_REQUEST;

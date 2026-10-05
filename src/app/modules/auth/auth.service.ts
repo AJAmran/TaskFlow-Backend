@@ -62,6 +62,39 @@ const otpResetKey = (email: string) => `otp:reset:${email.toLowerCase()}`;
 const otpResetCooldownKey = (email: string) =>
 	`otp:reset:cooldown:${email.toLowerCase()}`;
 
+const OTP_MAX_ATTEMPTS = 5;
+
+const otpAttemptKey = (email: string, scope: "verify" | "reset") =>
+	`otp:attempts:${scope}:${email.toLowerCase()}`;
+
+const otpMatches = (expected: string, provided: string): boolean => {
+	const a = Buffer.from(expected);
+	const b = Buffer.from(provided);
+	if (a.length !== b.length) {
+		return false;
+	}
+	return crypto.timingSafeEqual(a, b);
+};
+
+const registerOtpFailure = async (
+	email: string,
+	scope: "verify" | "reset",
+): Promise<void> => {
+	const key = otpAttemptKey(email, scope);
+	const attempts = await redisClient.incr(key);
+	if (attempts === 1) {
+		await redisClient.expire(key, OTP_TTL_SECONDS);
+	}
+	if (attempts >= OTP_MAX_ATTEMPTS) {
+		await redisClient.del(otpVerifyKey(email));
+		await redisClient.del(otpResetKey(email));
+		await redisClient.del(key);
+	}
+};
+
+const clearOtpFailures = (email: string, scope: "verify" | "reset") =>
+	redisClient.del(otpAttemptKey(email, scope));
+
 const generateOtp = (): string => crypto.randomInt(100000, 1000000).toString();
 
 const sendVerificationEmail = async (
@@ -139,6 +172,7 @@ const register = async (payload: IRegisterPayload) => {
 					`Please wait ${OTP_RESEND_COOLDOWN} seconds before requesting a new OTP`,
 				);
 			}
+			await clearOtpFailures(email, "verify");
 			const otp = generateOtp();
 			await redisClient.set(otpVerifyKey(email), otp, {
 				expiration: { type: "EX", value: OTP_TTL_SECONDS },
@@ -210,6 +244,7 @@ const login = async (payload: ILoginPayload) => {
 		const otp = generateOtp();
 		const cooldown = await redisClient.get(otpVerifyCooldownKey(email));
 		if (!cooldown) {
+			await clearOtpFailures(email, "verify");
 			await redisClient.set(otpVerifyKey(email), otp, {
 				expiration: { type: "EX", value: OTP_TTL_SECONDS },
 			});
@@ -256,6 +291,12 @@ const refreshToken = async (token: string) => {
 	}
 	if (user.email !== data.email)
 		throw new AppError(httpStatus.UNAUTHORIZED, "Token email mismatch");
+	if (!user.isEmailVerified) {
+		throw new AppError(
+			httpStatus.FORBIDDEN,
+			"Email not verified. Please verify your email.",
+		);
+	}
 	const jwtPayload = {
 		userId: user.id,
 		name: user.name,
@@ -293,6 +334,11 @@ const googleLogin = async (payload: IGoogleLoginPayload) => {
 		throw new AppError(
 			httpStatus.BAD_REQUEST,
 			"Google token is missing required fields",
+		);
+	if (googlePayload.email_verified === false)
+		throw new AppError(
+			httpStatus.FORBIDDEN,
+			"Your Google email is not verified. Verify it with Google and try again.",
 		);
 	const email = googlePayload.email.trim().toLowerCase();
 	const name = googlePayload.name;
@@ -397,7 +443,10 @@ const verifyEmail = async (payload: IVerifyEmailPayload) => {
 	const email = payload.email.trim().toLowerCase();
 	const user = await prisma.user.findUnique({ where: { email } });
 	if (!user || user.deletedAt)
-		throw new AppError(httpStatus.NOT_FOUND, "User not found");
+		throw new AppError(
+			httpStatus.BAD_REQUEST,
+			"OTP expired or not found. Please request a new one.",
+		);
 	if (user.isEmailVerified)
 		throw new AppError(httpStatus.BAD_REQUEST, "Email already verified");
 	if (!user.isActive)
@@ -409,8 +458,14 @@ const verifyEmail = async (payload: IVerifyEmailPayload) => {
 			httpStatus.BAD_REQUEST,
 			"OTP expired or not found. Please request a new one.",
 		);
-	if (storedOtp !== payload.otp.trim())
-		throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP");
+	if (!otpMatches(storedOtp, payload.otp.trim())) {
+		await registerOtpFailure(email, "verify");
+		throw new AppError(
+			httpStatus.BAD_REQUEST,
+			`Invalid OTP. ${OTP_MAX_ATTEMPTS} attempts allowed per code.`,
+		);
+	}
+	await clearOtpFailures(email, "verify");
 	const updated = await prisma.user.update({
 		where: { id: user.id },
 		data: { isEmailVerified: true, emailVerifiedAt: new Date() },
@@ -425,7 +480,7 @@ const resendOtp = async (emailRaw: string) => {
 	const email = emailRaw.trim().toLowerCase();
 	const user = await prisma.user.findUnique({ where: { email } });
 	if (!user || user.deletedAt)
-		throw new AppError(httpStatus.NOT_FOUND, "User not found");
+		return { message: "If an account exists for this email, an OTP has been sent" };
 	if (user.isEmailVerified)
 		throw new AppError(httpStatus.BAD_REQUEST, "Email already verified");
 	if (!user.isActive)
@@ -437,6 +492,7 @@ const resendOtp = async (emailRaw: string) => {
 			httpStatus.TOO_MANY_REQUESTS,
 			`Please wait ${OTP_RESEND_COOLDOWN} seconds before requesting a new OTP`,
 		);
+	await clearOtpFailures(email, "verify");
 	const otp = generateOtp();
 	await redisClient.set(otpVerifyKey(email), otp, {
 		expiration: { type: "EX", value: OTP_TTL_SECONDS },
@@ -452,7 +508,7 @@ const forgotPassword = async (payload: IForgotPasswordPayload) => {
 	const email = payload.email.trim().toLowerCase();
 	const user = await prisma.user.findUnique({ where: { email } });
 	if (!user || user.deletedAt)
-		throw new AppError(httpStatus.NOT_FOUND, "User not found");
+		return { message: "If an account exists for this email, a password reset OTP has been sent" };
 	if (!user.isActive)
 		throw new AppError(httpStatus.FORBIDDEN, "Account is blocked");
 	if (user.provider === "google" && !user.password)
@@ -467,6 +523,7 @@ const forgotPassword = async (payload: IForgotPasswordPayload) => {
 			httpStatus.TOO_MANY_REQUESTS,
 			`Please wait ${OTP_RESEND_COOLDOWN} seconds before requesting a new OTP`,
 		);
+	await clearOtpFailures(email, "reset");
 	const otp = generateOtp();
 	await redisClient.set(otpResetKey(email), otp, {
 		expiration: { type: "EX", value: OTP_TTL_SECONDS },
@@ -482,7 +539,10 @@ const resetPassword = async (payload: IResetPasswordPayload) => {
 	const email = payload.email.trim().toLowerCase();
 	const user = await prisma.user.findUnique({ where: { email } });
 	if (!user || user.deletedAt)
-		throw new AppError(httpStatus.NOT_FOUND, "User not found");
+		throw new AppError(
+			httpStatus.BAD_REQUEST,
+			"OTP expired or not found. Please request a new one.",
+		);
 	if (!user.isActive)
 		throw new AppError(httpStatus.FORBIDDEN, "Account is blocked");
 	requireRedis();
@@ -492,8 +552,14 @@ const resetPassword = async (payload: IResetPasswordPayload) => {
 			httpStatus.BAD_REQUEST,
 			"OTP expired or not found. Please request a new one.",
 		);
-	if (storedOtp !== payload.otp.trim())
-		throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP");
+	if (!otpMatches(storedOtp, payload.otp.trim())) {
+		await registerOtpFailure(email, "reset");
+		throw new AppError(
+			httpStatus.BAD_REQUEST,
+			`Invalid OTP. ${OTP_MAX_ATTEMPTS} attempts allowed per code.`,
+		);
+	}
+	await clearOtpFailures(email, "reset");
 	const hashed = await hashPassword(payload.newPassword);
 	await prisma.user.update({
 		where: { id: user.id },

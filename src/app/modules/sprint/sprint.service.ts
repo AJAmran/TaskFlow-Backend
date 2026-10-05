@@ -1,36 +1,16 @@
 import httpStatus from "http-status";
-import { OrgRole, SprintStatus } from "../../../generated/prisma/enums";
+import { SprintStatus } from "../../../generated/prisma/enums";
+import { assertOrgAccess } from "../../middleware/auth";
 import { invalidateOrgDashboard } from "../../lib/cache";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { calculatePagination } from "../../utils/pagination";
 
-const ensureOrgMembership = async (
+const ensureOrgMembership = (
 	userId: string,
 	organizationId: string,
 	requireOwner = false,
-) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
-	if (requireOwner && membership.role !== OrgRole.ORG_OWNER) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"Only ORG_OWNER can perform this action",
-		);
-	}
-	const org = await prisma.organization.findFirst({
-		where: { id: organizationId, deletedAt: null },
-	});
-	if (!org) throw new AppError(httpStatus.NOT_FOUND, "Organization not found");
-	return membership;
-};
+) => assertOrgAccess(userId, organizationId, { requireOwner });
 
 const ensureProject = async (organizationId: string, projectId: string) => {
 	const project = await prisma.project.findFirst({
@@ -176,14 +156,23 @@ const updateSprint = async (
 		);
 	}
 
-	const updated = await prisma.sprint.update({
-		where: { id: sprintId },
+	const applied = await prisma.sprint.updateMany({
+		where: { id: sprintId, status: SprintStatus.PLANNED, deletedAt: null },
 		data: {
 			...(payload.name !== undefined && { name: payload.name.trim() }),
 			...(payload.startDate !== undefined && { startDate }),
 			...(payload.endDate !== undefined && { endDate }),
 		},
 	});
+	if (applied.count === 0) {
+		throw new AppError(
+			httpStatus.CONFLICT,
+			"Sprint was changed by someone else. Reload and try again.",
+		);
+	}
+
+	const updated = await prisma.sprint.findUnique({ where: { id: sprintId } });
+	if (!updated) throw new AppError(httpStatus.NOT_FOUND, "Sprint not found");
 
 	await prisma.activityLog.create({
 		data: {
@@ -218,27 +207,32 @@ const activateSprint = async (
 		);
 	}
 
-	const result = await prisma.$transaction(async (tx) => {
-		await tx.sprint.updateMany({
-			where: { projectId, status: SprintStatus.ACTIVE, deletedAt: null },
-			data: { status: SprintStatus.COMPLETED },
-		});
+	const result = await prisma.$transaction(
+		async (tx) => {
+			await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sprint-activate-${projectId}`}))`;
 
-		const activated = await tx.sprint.update({
-			where: { id: sprintId },
-			data: { status: SprintStatus.ACTIVE },
-		});
+			await tx.sprint.updateMany({
+				where: { projectId, status: SprintStatus.ACTIVE, deletedAt: null },
+				data: { status: SprintStatus.COMPLETED },
+			});
 
-		await tx.activityLog.create({
-			data: {
-				userId,
-				action: "SPRINT_ACTIVATED",
-				meta: { organizationId, projectId, sprintId },
-			},
-		});
+			const activated = await tx.sprint.update({
+				where: { id: sprintId },
+				data: { status: SprintStatus.ACTIVE },
+			});
 
-		return activated;
-	});
+			await tx.activityLog.create({
+				data: {
+					userId,
+					action: "SPRINT_ACTIVATED",
+					meta: { organizationId, projectId, sprintId },
+				},
+			});
+
+			return activated;
+		},
+		{ isolationLevel: "Serializable" },
+	);
 
 	await invalidateOrgDashboard(organizationId);
 
@@ -262,10 +256,19 @@ const completeSprint = async (
 		);
 	}
 
-	const updated = await prisma.sprint.update({
-		where: { id: sprintId },
+	const completed = await prisma.sprint.updateMany({
+		where: { id: sprintId, status: SprintStatus.ACTIVE, deletedAt: null },
 		data: { status: SprintStatus.COMPLETED },
 	});
+	if (completed.count === 0) {
+		throw new AppError(
+			httpStatus.CONFLICT,
+			"Sprint was changed by someone else. Reload and try again.",
+		);
+	}
+
+	const updated = await prisma.sprint.findUnique({ where: { id: sprintId } });
+	if (!updated) throw new AppError(httpStatus.NOT_FOUND, "Sprint not found");
 
 	await prisma.activityLog.create({
 		data: {

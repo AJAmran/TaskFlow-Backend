@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
 import httpStatus from "http-status";
 import {
-	OrgRole,
 	SubscriptionPlan,
 	SubscriptionStatus,
 } from "../../../generated/prisma/enums";
 import { Prisma } from "../../../generated/prisma/client";
+import { assertOrgAccess } from "../../middleware/auth";
 import {
 	createBkashPayment,
 	executeBkashPayment,
@@ -31,41 +31,15 @@ const PLAN_CATALOG = {
 
 type PaidPlan = keyof typeof PLAN_CATALOG;
 
-const ensureOwner = async (userId: string, organizationId: string) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
-	if (membership.role !== OrgRole.ORG_OWNER) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"Only ORG_OWNER can manage billing",
-		);
-	}
-	const organization = await prisma.organization.findFirst({
-		where: { id: organizationId, deletedAt: null },
-	});
-	if (!organization)
-		throw new AppError(httpStatus.NOT_FOUND, "Organization not found");
-	return membership;
-};
+const ensureOwner = (userId: string, organizationId: string) =>
+	assertOrgAccess(userId, organizationId, { requireOwner: true });
 
-const ensureMember = async (userId: string, organizationId: string) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
-	return membership;
+const ensureMember = (userId: string, organizationId: string) =>
+	assertOrgAccess(userId, organizationId);
+
+const sanitizePayment = <T extends { gatewayResponse?: unknown }>(payment: T) => {
+	const { gatewayResponse: _dropped, ...rest } = payment;
+	return rest;
 };
 
 const confirmSuccess = async (
@@ -73,6 +47,8 @@ const confirmSuccess = async (
 	gatewayResponse: unknown,
 	actorUserId: string,
 	trxID?: string,
+	gatewayAmount?: string,
+	gatewayCurrency?: string,
 ) => {
 	const plan = (gatewayResponse as { plan?: SubscriptionPlan } | null)?.plan;
 	const catalog =
@@ -82,6 +58,26 @@ const confirmSuccess = async (
 		const payment = await tx.payment.findUnique({ where: { id: paymentId } });
 		if (!payment) throw new AppError(httpStatus.NOT_FOUND, "Payment not found");
 		if (payment.status === "SUCCESS") return payment;
+
+		if (
+			gatewayAmount !== undefined &&
+			Number(gatewayAmount) !== Number(payment.amount)
+		) {
+			throw new AppError(
+				httpStatus.BAD_REQUEST,
+				`Payment amount mismatch: charged ${gatewayAmount}, expected ${payment.amount}. Contact support.`,
+			);
+		}
+		if (
+			gatewayCurrency &&
+			gatewayCurrency !== payment.currency &&
+			catalog
+		) {
+			throw new AppError(
+				httpStatus.BAD_REQUEST,
+				`Payment currency mismatch: charged ${gatewayCurrency}, expected ${payment.currency}. Contact support.`,
+			);
+		}
 
 		const updated = await tx.payment.update({
 			where: { id: paymentId },
@@ -182,17 +178,20 @@ const initiate = async (
 			amount: catalog.amount,
 			merchantInvoiceNumber: local.id,
 		});
-	} catch (e) {
+	} catch {
 		await prisma.payment.update({
 			where: { id: local.id },
 			data: {
 				status: "FAILED",
-				gatewayResponse: { plan: payload.plan, error: (e as Error).message },
+				gatewayResponse: {
+					plan: payload.plan,
+					error: "Payment gateway request failed",
+				},
 			},
 		});
 		throw new AppError(
 			httpStatus.BAD_GATEWAY,
-			`bKash payment creation failed: ${(e as Error).message}`,
+			"bKash payment creation failed. Please try again.",
 		);
 	}
 
@@ -204,16 +203,25 @@ const initiate = async (
 		},
 	});
 
-	return { payment, bkashURL: bkash.bkashURL };
+	return { payment: sanitizePayment(payment), bkashURL: bkash.bkashURL };
 };
 
 const execute = async (userId: string, paymentID: string) => {
-	const existing = await prisma.payment.findUnique({ where: { paymentID } });
-	if (!existing) throw new AppError(httpStatus.NOT_FOUND, "Payment not found");
-	await ensureOwner(userId, existing.organizationId);
+	const scoped = await prisma.payment.findFirst({
+		where: {
+			paymentID,
+			organization: { members: { some: { userId, deletedAt: null } } },
+		},
+	});
+	if (!scoped) throw new AppError(httpStatus.NOT_FOUND, "Payment not found");
+	await ensureOwner(userId, scoped.organizationId);
+	const existing = scoped;
 
 	if (existing.status === "SUCCESS") {
-		return { payment: existing, message: "Payment already processed" };
+		return {
+			payment: sanitizePayment(existing),
+			message: "Payment already processed",
+		};
 	}
 
 	const { executed, queried, success, trxID } =
@@ -226,7 +234,10 @@ const execute = async (userId: string, paymentID: string) => {
 
 	if (!success) {
 		const payment = await markFailed(existing.id, gatewayResponse);
-		return { payment, message: "Payment not completed at gateway" };
+		return {
+			payment: sanitizePayment(payment),
+			message: "Payment not completed at gateway",
+		};
 	}
 
 	const payment = await confirmSuccess(
@@ -234,8 +245,13 @@ const execute = async (userId: string, paymentID: string) => {
 		gatewayResponse,
 		userId,
 		trxID,
+		executed.amount,
+		executed.currency,
 	);
-	return { payment, message: "Payment verified and subscription upgraded" };
+	return {
+		payment: sanitizePayment(payment),
+		message: "Payment verified and subscription upgraded",
+	};
 };
 
 const handleCallback = async (query: {
@@ -249,7 +265,10 @@ const handleCallback = async (query: {
 	const existing = await prisma.payment.findUnique({ where: { paymentID } });
 	if (!existing) throw new AppError(httpStatus.NOT_FOUND, "Payment not found");
 	if (existing.status === "SUCCESS") {
-		return { payment: existing, message: "Payment already processed" };
+		return {
+			payment: sanitizePayment(existing),
+			message: "Payment already processed",
+		};
 	}
 
 	if (status !== "success") {
@@ -264,7 +283,7 @@ const handleCallback = async (query: {
 			},
 		});
 		return {
-			payment,
+			payment: sanitizePayment(payment),
 			message: `Payment ${payment.status.toLowerCase()} via gateway callback`,
 		};
 	}
@@ -280,7 +299,10 @@ const handleCallback = async (query: {
 
 	if (!success) {
 		const payment = await markFailed(existing.id, gatewayResponse);
-		return { payment, message: "Payment not completed at gateway" };
+		return {
+			payment: sanitizePayment(payment),
+			message: "Payment not completed at gateway",
+		};
 	}
 
 	const organization = await prisma.organization.findUnique({
@@ -294,15 +316,24 @@ const handleCallback = async (query: {
 		gatewayResponse,
 		organization.ownerUserId,
 		trxID,
+		executed.amount,
+		executed.currency,
 	);
-	return { payment, message: "Payment verified and subscription upgraded" };
+	return {
+		payment: sanitizePayment(payment),
+		message: "Payment verified and subscription upgraded",
+	};
 };
 
 const getById = async (userId: string, id: string) => {
-	const payment = await prisma.payment.findUnique({ where: { id } });
+	const payment = await prisma.payment.findFirst({
+		where: {
+			id,
+			organization: { members: { some: { userId, deletedAt: null } } },
+		},
+	});
 	if (!payment) throw new AppError(httpStatus.NOT_FOUND, "Payment not found");
-	await ensureMember(userId, payment.organizationId);
-	return payment;
+	return sanitizePayment(payment);
 };
 
 const getSubscription = async (userId: string, organizationId: string) => {
@@ -310,7 +341,18 @@ const getSubscription = async (userId: string, organizationId: string) => {
 	const subscription = await prisma.subscription.findUnique({
 		where: { organizationId },
 		include: {
-			payments: { orderBy: { createdAt: "desc" }, take: 10 },
+			payments: {
+				orderBy: { createdAt: "desc" },
+				take: 10,
+				select: {
+					id: true,
+					amount: true,
+					currency: true,
+					status: true,
+					trxID: true,
+					createdAt: true,
+				},
+			},
 		},
 	});
 	if (!subscription)

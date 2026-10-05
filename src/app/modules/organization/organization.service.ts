@@ -6,6 +6,8 @@ import {
 	SubscriptionStatus,
 } from "../../../generated/prisma/enums";
 import { prisma } from "../../lib/prisma";
+import { invalidateOrgDashboard } from "../../lib/cache";
+import { assertOrgAccess } from "../../middleware/auth";
 import { AppError } from "../../utils/AppError";
 import { calculatePagination } from "../../utils/pagination";
 
@@ -29,7 +31,6 @@ const createOrganization = async (
 	let slug = baseSlug;
 	let attempt = 0;
 
-	// ensure unique slug — try suffix if taken
 	while (true) {
 		const existing = await prisma.organization.findUnique({ where: { slug } });
 		if (!existing) break;
@@ -85,13 +86,19 @@ const createOrganization = async (
 
 const getMyOrganizations = async (
 	userId: string,
-	query: { page?: number; limit?: number },
+	query: { page?: number; limit?: number; search?: string },
 ) => {
 	const { page, limit, skip } = calculatePagination(query);
+	const search = query.search?.trim();
 	const where = {
 		userId,
 		deletedAt: null,
-		organization: { deletedAt: null },
+		organization: {
+			deletedAt: null,
+			...(search && {
+				name: { contains: search, mode: "insensitive" as const },
+			}),
+		},
 	};
 
 	const [memberships, total] = await Promise.all([
@@ -138,15 +145,7 @@ const getMyOrganizations = async (
 };
 
 const getOrganizationById = async (userId: string, organizationId: string) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
+	const membership = await assertOrgAccess(userId, organizationId);
 
 	const organization = await prisma.organization.findFirst({
 		where: { id: organizationId, deletedAt: null },
@@ -173,15 +172,9 @@ const updateOrganization = async (
 	organizationId: string,
 	payload: { name?: string; slug?: string },
 ) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
+	const membership = await assertOrgAccess(userId, organizationId, {
+		requireOwner: true,
 	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
 	if (membership.role !== OrgRole.ORG_OWNER) {
 		throw new AppError(
 			httpStatus.FORBIDDEN,
@@ -231,15 +224,9 @@ const inviteMember = async (
 	const email = payload.email.toLowerCase().trim();
 	const role = payload.role || OrgRole.MEMBER;
 
-	const inviterMembership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId: invitedById } },
+	const inviterMembership = await assertOrgAccess(invitedById, organizationId, {
+		requireOwner: true,
 	});
-	if (!inviterMembership || inviterMembership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
 	if (inviterMembership.role !== OrgRole.ORG_OWNER) {
 		throw new AppError(
 			httpStatus.FORBIDDEN,
@@ -282,15 +269,19 @@ const inviteMember = async (
 		);
 	}
 
-	// optional early limit check (soft)
-	// we allow invite even at limit but warn; acceptance will enforce
 	const subscription = await prisma.subscription.findUnique({
 		where: { organizationId },
 	});
 	const memberCount = await prisma.organizationMember.count({
 		where: { organizationId, deletedAt: null },
 	});
-	if (subscription && memberCount >= subscription.maxMembers) {
+	if (!subscription) {
+		throw new AppError(
+			httpStatus.NOT_FOUND,
+			"Organization subscription not found",
+		);
+	}
+	if (memberCount >= subscription.maxMembers) {
 		throw new AppError(
 			httpStatus.FORBIDDEN,
 			`Organization member limit reached (${subscription.maxMembers}) for ${subscription.plan} plan. Please upgrade.`,
@@ -300,7 +291,6 @@ const inviteMember = async (
 	const token = generateInviteToken();
 	const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-	// if expired invite exists, delete it to allow re-invite (upsert)
 	if (existingInvite) {
 		await prisma.organizationInvitation.delete({
 			where: { id: existingInvite.id },
@@ -326,7 +316,6 @@ const inviteMember = async (
 		},
 	});
 
-	// Try to send email — don't fail if fails (Resend in prod, SMTP in dev)
 	try {
 		const { sendEmail } = await import("../../lib/email");
 		const { default: config } = await import("../../config");
@@ -403,7 +392,6 @@ const acceptInvite = async (userId: string, token: string) => {
 			);
 		}
 
-		// if soft-deleted membership exists, restore it
 		let membership: Awaited<ReturnType<typeof tx.organizationMember.create>>;
 		if (existing?.deletedAt) {
 			membership = await tx.organizationMember.update({
@@ -441,6 +429,8 @@ const acceptInvite = async (userId: string, token: string) => {
 		return membership;
 	});
 
+	await invalidateOrgDashboard(invitation.organizationId);
+
 	return result;
 };
 
@@ -449,15 +439,7 @@ const listMembers = async (
 	organizationId: string,
 	query: { page?: number; limit?: number },
 ) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId: requesterId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
+	await assertOrgAccess(requesterId, organizationId);
 
 	const { page, limit, skip } = calculatePagination(query);
 	const where = { organizationId, deletedAt: null };
@@ -496,15 +478,9 @@ const updateMemberRole = async (
 	targetUserId: string,
 	newRole: OrgRole,
 ) => {
-	const requesterMembership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId: requesterId } },
+	const requesterMembership = await assertOrgAccess(requesterId, organizationId, {
+		requireOwner: true,
 	});
-	if (!requesterMembership || requesterMembership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
 	if (requesterMembership.role !== OrgRole.ORG_OWNER) {
 		throw new AppError(
 			httpStatus.FORBIDDEN,
@@ -520,7 +496,6 @@ const updateMemberRole = async (
 
 	if (target.role === newRole) return target;
 
-	// prevent demoting last owner
 	if (target.role === OrgRole.ORG_OWNER && newRole === OrgRole.MEMBER) {
 		const ownerCount = await prisma.organizationMember.count({
 			where: { organizationId, role: OrgRole.ORG_OWNER, deletedAt: null },
@@ -546,6 +521,8 @@ const updateMemberRole = async (
 		},
 	});
 
+	await invalidateOrgDashboard(organizationId);
+
 	return updated;
 };
 
@@ -554,15 +531,9 @@ const removeMember = async (
 	organizationId: string,
 	targetUserId: string,
 ) => {
-	const requesterMembership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId: requesterId } },
+	const requesterMembership = await assertOrgAccess(requesterId, organizationId, {
+		requireOwner: true,
 	});
-	if (!requesterMembership || requesterMembership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
 	if (requesterMembership.role !== OrgRole.ORG_OWNER) {
 		throw new AppError(
 			httpStatus.FORBIDDEN,
@@ -580,7 +551,6 @@ const removeMember = async (
 	if (!target || target.deletedAt)
 		throw new AppError(httpStatus.NOT_FOUND, "Member not found");
 
-	// if target is owner, ensure at least one owner remains
 	if (target.role === OrgRole.ORG_OWNER) {
 		const ownerCount = await prisma.organizationMember.count({
 			where: { organizationId, role: OrgRole.ORG_OWNER, deletedAt: null },
@@ -593,19 +563,31 @@ const removeMember = async (
 		}
 	}
 
-	// removing the org owner is allowed as long as one owner remains
-	const updated = await prisma.organizationMember.update({
-		where: { id: target.id },
-		data: { deletedAt: new Date() },
+	const updated = await prisma.$transaction(async (tx) => {
+		const member = await tx.organizationMember.update({
+			where: { id: target.id },
+			data: { deletedAt: new Date() },
+		});
+
+		await tx.teamMember.deleteMany({ where: { userId: targetUserId } });
+		await tx.projectMember.deleteMany({ where: { userId: targetUserId } });
+		await tx.task.updateMany({
+			where: { assigneeId: targetUserId, deletedAt: null },
+			data: { assigneeId: null },
+		});
+
+		await tx.activityLog.create({
+			data: {
+				userId: requesterId,
+				action: "MEMBER_REMOVED",
+				meta: { organizationId, targetUserId },
+			},
+		});
+
+		return member;
 	});
 
-	await prisma.activityLog.create({
-		data: {
-			userId: requesterId,
-			action: "MEMBER_REMOVED",
-			meta: { organizationId, targetUserId },
-		},
-	});
+	await invalidateOrgDashboard(organizationId);
 
 	return updated;
 };

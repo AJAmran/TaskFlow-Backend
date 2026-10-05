@@ -33,9 +33,6 @@ export type BkashExecuteResult = {
 
 const baseUrl = () => config.bkash_base_url.replace(/\/$/, "");
 
-/**
- * Helper function to send JSON POST requests using fetch with timeout handling.
- */
 const postJson = async <T>(
 	url: string,
 	body: unknown,

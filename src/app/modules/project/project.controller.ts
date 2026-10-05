@@ -12,7 +12,11 @@ const createProject = catchAsync(async (req: Request, res: Response) => {
 	const result = await ProjectService.createProject(
 		user.userId,
 		organizationId as string,
-		req.body,
+		{
+			...req.body,
+			...(req.body.startDate ? { startDate: new Date(req.body.startDate) } : {}),
+			...(req.body.endDate ? { endDate: new Date(req.body.endDate) } : {}),
+		},
 	);
 	sendResponse(res, {
 		statusCode: httpStatus.CREATED,
@@ -65,7 +69,15 @@ const updateProject = catchAsync(async (req: Request, res: Response) => {
 		user.userId,
 		organizationId as string,
 		projectId as string,
-		req.body,
+		{
+			...req.body,
+			...(req.body.startDate !== undefined
+				? { startDate: req.body.startDate ? new Date(req.body.startDate) : null }
+				: {}),
+			...(req.body.endDate !== undefined
+				? { endDate: req.body.endDate ? new Date(req.body.endDate) : null }
+				: {}),
+		},
 	);
 	sendResponse(res, {
 		statusCode: httpStatus.OK,
@@ -101,7 +113,6 @@ const addProjectMember = catchAsync(async (req: Request, res: Response) => {
 		organizationId as string,
 		projectId as string,
 		req.body.userId,
-		req.body.role,
 	);
 	sendResponse(res, {
 		statusCode: httpStatus.CREATED,

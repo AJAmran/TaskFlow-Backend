@@ -7,11 +7,14 @@ import express, {
 } from "express";
 import helmet from "helmet";
 import httpStatus from "http-status";
+import { csrfGuard } from "./app/middleware/csrfGuard";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
 import router from "./app/routes";
 
 const app: Application = express();
+
+app.set("trust proxy", 1);
 
 app.use(helmet());
 
@@ -35,6 +38,7 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(csrfGuard);
 
 app.get("/", (_req: Request, res: Response) => {
 	res.status(httpStatus.OK).json({

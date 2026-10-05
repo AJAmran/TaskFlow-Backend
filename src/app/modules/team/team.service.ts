@@ -1,35 +1,15 @@
 import httpStatus from "http-status";
+import { invalidateOrgDashboard } from "../../lib/cache";
 import { prisma } from "../../lib/prisma";
+import { assertOrgAccess } from "../../middleware/auth";
 import { AppError } from "../../utils/AppError";
 import { calculatePagination } from "../../utils/pagination";
-import { OrgRole } from "../../../generated/prisma/enums";
 
-const ensureOrgMembership = async (
+const ensureOrgMembership = (
 	userId: string,
 	organizationId: string,
 	requireOwner = false,
-) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
-	if (requireOwner && membership.role !== OrgRole.ORG_OWNER) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"Only ORG_OWNER can perform this action",
-		);
-	}
-	const org = await prisma.organization.findFirst({
-		where: { id: organizationId, deletedAt: null },
-	});
-	if (!org) throw new AppError(httpStatus.NOT_FOUND, "Organization not found");
-	return membership;
-};
+) => assertOrgAccess(userId, organizationId, { requireOwner });
 
 const createTeam = async (
 	userId: string,
@@ -53,17 +33,24 @@ const createTeam = async (
 		},
 	});
 
+	await invalidateOrgDashboard(organizationId);
+
 	return team;
 };
 
 const listTeams = async (
 	userId: string,
 	organizationId: string,
-	query: { page?: number; limit?: number },
+	query: { page?: number; limit?: number; search?: string },
 ) => {
 	await ensureOrgMembership(userId, organizationId);
 	const { page, limit, skip } = calculatePagination(query);
-	const where = { organizationId, deletedAt: null };
+	const search = query.search?.trim();
+	const where = {
+		organizationId,
+		deletedAt: null,
+		...(search && { name: { contains: search, mode: "insensitive" as const } }),
+	};
 
 	const [teams, total] = await Promise.all([
 		prisma.team.findMany({
@@ -98,6 +85,7 @@ const getTeamById = async (
 						select: { id: true, name: true, email: true, profileImage: true },
 					},
 				},
+				take: 200,
 			},
 			_count: { select: { members: true } },
 		},
@@ -112,7 +100,7 @@ const updateTeam = async (
 	teamId: string,
 	payload: { name?: string },
 ) => {
-	await ensureOrgMembership(userId, organizationId);
+	await ensureOrgMembership(userId, organizationId, true);
 
 	const team = await prisma.team.findFirst({
 		where: { id: teamId, organizationId, deletedAt: null },
@@ -132,6 +120,8 @@ const updateTeam = async (
 		},
 	});
 
+	await invalidateOrgDashboard(organizationId);
+
 	return updated;
 };
 
@@ -147,14 +137,27 @@ const softDeleteTeam = async (
 	});
 	if (!team) throw new AppError(httpStatus.NOT_FOUND, "Team not found");
 
-	const updated = await prisma.team.update({
-		where: { id: teamId },
-		data: { deletedAt: new Date() },
+	const deletedAt = new Date();
+
+	const updated = await prisma.$transaction(async (tx) => {
+		await tx.project.updateMany({
+			where: { teamId, deletedAt: null },
+			data: { teamId: null },
+		});
+
+		const team = await tx.team.update({
+			where: { id: teamId },
+			data: { deletedAt },
+		});
+
+		await tx.activityLog.create({
+			data: { userId, action: "TEAM_DELETED", meta: { organizationId, teamId } },
+		});
+
+		return team;
 	});
 
-	await prisma.activityLog.create({
-		data: { userId, action: "TEAM_DELETED", meta: { organizationId, teamId } },
-	});
+	await invalidateOrgDashboard(organizationId);
 
 	return updated;
 };
@@ -165,7 +168,7 @@ const addTeamMember = async (
 	teamId: string,
 	targetUserId: string,
 ) => {
-	await ensureOrgMembership(userId, organizationId);
+	await ensureOrgMembership(userId, organizationId, true);
 
 	const team = await prisma.team.findFirst({
 		where: { id: teamId, organizationId, deletedAt: null },
@@ -207,6 +210,8 @@ const addTeamMember = async (
 			meta: { organizationId, teamId, targetUserId },
 		},
 	});
+
+	await invalidateOrgDashboard(organizationId);
 
 	return teamMember;
 };
@@ -260,7 +265,7 @@ const removeTeamMember = async (
 	teamId: string,
 	targetUserId: string,
 ) => {
-	await ensureOrgMembership(userId, organizationId);
+	await ensureOrgMembership(userId, organizationId, true);
 
 	const team = await prisma.team.findFirst({
 		where: { id: teamId, organizationId, deletedAt: null },
@@ -284,6 +289,8 @@ const removeTeamMember = async (
 			meta: { organizationId, teamId, targetUserId },
 		},
 	});
+
+	await invalidateOrgDashboard(organizationId);
 
 	return null;
 };

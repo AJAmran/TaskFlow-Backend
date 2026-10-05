@@ -1,5 +1,6 @@
 import httpStatus from "http-status";
 import { prisma } from "../../lib/prisma";
+import { assertOrgAccess } from "../../middleware/auth";
 import { AppError } from "../../utils/AppError";
 import {
 	DASHBOARD_TTL_SECONDS,
@@ -33,15 +34,7 @@ type DashboardStats = {
 };
 
 const getOrgDashboard = async (userId: string, organizationId: string) => {
-	const membership = await prisma.organizationMember.findUnique({
-		where: { organizationId_userId: { organizationId, userId } },
-	});
-	if (!membership || membership.deletedAt) {
-		throw new AppError(
-			httpStatus.FORBIDDEN,
-			"You are not a member of this organization",
-		);
-	}
+	await assertOrgAccess(userId, organizationId);
 
 	const organization = await prisma.organization.findFirst({
 		where: { id: organizationId, deletedAt: null },

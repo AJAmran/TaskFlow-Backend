@@ -8,9 +8,6 @@ export type SendEmailParams = {
 	text?: string;
 };
 
-/**
- * Send transactional email using Resend API if configured, falling back to Nodemailer SMTP.
- */
 export const sendEmail = async (params: SendEmailParams): Promise<void> => {
 	const { to, subject, html, text } = params;
 

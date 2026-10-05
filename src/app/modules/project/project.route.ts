@@ -57,6 +57,7 @@ router.post(
 	"/:organizationId/projects/:projectId/members",
 	authenticate,
 	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
 	validateRequest(ProjectValidation.addProjectMemberSchema),
 	ProjectController.addProjectMember,
 );
@@ -73,6 +74,7 @@ router.delete(
 	"/:organizationId/projects/:projectId/members/:userId",
 	authenticate,
 	requireOrgMembership,
+	requireRole(OrgRole.ORG_OWNER),
 	ProjectController.removeProjectMember,
 );
 

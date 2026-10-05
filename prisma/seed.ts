@@ -21,7 +21,6 @@ async function main() {
 
   const SALT = 12;
 
-  //  1. Super Admin (canonical demo creds: SUPER_ADMIN_* env, defaults match README/.env.example)
   const superAdminEmail =
     process.env.SUPER_ADMIN_EMAIL ?? "superadmin@gmail.com";
   const superAdminName = process.env.SUPER_ADMIN_NAME ?? "Super Admin";
@@ -32,7 +31,6 @@ async function main() {
 
   const superAdmin = await prisma.user.upsert({
     where: { email: superAdminEmail },
-    // Re-seed refreshes password so live DB always matches documented demo creds
     update: {
       name: superAdminName,
       password: superAdminPassword,
@@ -51,7 +49,6 @@ async function main() {
   });
   console.log(`  Super Admin: ${superAdmin.email}`);
 
-  // 2. Real & Demo users for testing
   const ownerPassword = await bcrypt.hash("Owner@123", SALT);
   const memberPassword = await bcrypt.hash("Member@123", SALT);
 
@@ -91,7 +88,6 @@ async function main() {
     },
   });
 
-  // Legacy fallback alias for existing scripts
   await prisma.user.upsert({
     where: { email: "owner@demo.com" },
     update: { password: ownerPassword, isEmailVerified: true },
@@ -106,7 +102,6 @@ async function main() {
 
   console.log("  Users created: amran.xgroup@gmail.com, mdamranhossen77@gmail.com, firoz03dec@gmail.com");
 
-  //  3. Organization + Subscription (Pro)
   const existingOrg = await prisma.organization.findUnique({
     where: { slug: "demo-org" },
   });
@@ -134,7 +129,6 @@ async function main() {
 
   console.log(`  Organization: ${org.name}`);
 
-  //  4. Org Memberships
   await prisma.organizationMember.upsert({
     where: { organizationId_userId: { organizationId: org.id, userId: owner.id } },
     update: {},
@@ -151,7 +145,6 @@ async function main() {
 
   console.log("  Org memberships created");
 
-  //  5. Project + Members
   const existingProject = await prisma.project.findFirst({
     where: { organizationId: org.id, name: "Demo Project" },
   });
@@ -180,7 +173,6 @@ async function main() {
 
   console.log(`  Project: ${project.name}`);
 
-  //  6. Sprint
   const existingSprint = await prisma.sprint.findFirst({
     where: { projectId: project.id },
   });
@@ -197,7 +189,6 @@ async function main() {
         },
       });
 
-  //  7. Tasks
   const tasks = [
     { title: "Set up project repository", status: TaskStatus.DONE, priority: TaskPriority.HIGH, assigneeId: owner.id },
     { title: "Design database schema", status: TaskStatus.DONE, priority: TaskPriority.HIGH, assigneeId: member1.id },
