@@ -14,3 +14,4 @@ pnpm-workspace.yaml
 .vscode
 /generated/prisma
 .vercel
+.env*

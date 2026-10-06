@@ -29,7 +29,7 @@ const callback = async (req: Request, res: Response) => {
 
 		if (isSuccess) {
 			return res.redirect(
-				`${frontendUrl}/payment/success?paymentId=${payment.id}`,
+				`${frontendUrl}/payment/success?id=${payment.id}`,
 			);
 		}
 		// Redirect all non-success outcomes (cancelled, failed) to cancel page
