@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import httpStatus from "http-status";
+import config from "../../config";
 import { AppError } from "../../utils/AppError";
 import { catchAsync } from "../../utils/catchAsync";
 import { sendResponse } from "../../utils/sendResponse";
@@ -17,17 +18,28 @@ const initiate = catchAsync(async (req: Request, res: Response) => {
 	});
 });
 
-const callback = catchAsync(async (req: Request, res: Response) => {
-	const result = await PaymentService.handleCallback(
-		req.query as { paymentID?: string; status?: string },
-	);
-	sendResponse(res, {
-		statusCode: httpStatus.OK,
-		success: true,
-		message: result.message,
-		data: result.payment,
-	});
-});
+const callback = async (req: Request, res: Response) => {
+	const query = req.query as { paymentID?: string; status?: string };
+	const frontendUrl = config.frontend_url || "http://localhost:3000";
+
+	try {
+		const result = await PaymentService.handleCallback(query);
+		const payment = result.payment;
+		const isSuccess = payment.status === "SUCCESS";
+
+		if (isSuccess) {
+			return res.redirect(
+				`${frontendUrl}/payment/success?paymentId=${payment.id}`,
+			);
+		}
+		// Redirect all non-success outcomes (cancelled, failed) to cancel page
+		return res.redirect(
+			`${frontendUrl}/payment/cancel?paymentId=${payment.id}&status=${payment.status.toLowerCase()}`,
+		);
+	} catch {
+		return res.redirect(`${frontendUrl}/payment/cancel`);
+	}
+};
 
 const execute = catchAsync(async (req: Request, res: Response) => {
 	const user = req.user;
